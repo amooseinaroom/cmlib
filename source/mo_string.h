@@ -35,21 +35,28 @@ const mos_b8 mos_true  = 1;
 
 #define mos_carray_count(static_array) (sizeof(static_array) / sizeof(*(static_array)))
 
+#if !defined mos_u8_array_type
+#define mos_u8_array_type mos_u8_array
+
 typedef struct
 {
     mos_u8    *base;
     mos_usize count;
 } mos_u8_array;
 
+#endif
+
 typedef mos_u8_array mos_string;
 
 #ifdef __cplusplus
-#define mos_s(static_string) { (mos_u8 *) static_string, mos_carray_count(static_string) - 1 }
-#define mos_t(base, count)  { (mos_u8 *) base, (mos_usize) count }
+#define mos_struct_literal(name)
 #else
-#define mos_s(static_string) (mos_string) { (mos_u8 *) static_string, mos_carray_count(static_string) - 1 }
-#define mos_t(base, count) (mos_string) { (mos_u8 *) base, (mos_usize) count }
+#define mos_struct_literal(name) (name)
 #endif
+
+#define mos_s(static_string) mos_struct_literal(mos_string) { (mos_u8 *) static_string, mos_carray_count(static_string) - 1 }
+#define mos_t(base, count)   mos_struct_literal(mos_string) { (mos_u8 *) base, (mos_usize) count }
+#define mos_fs(text) (int) (text).count, (char *) (text).base
 
 typedef struct
 {

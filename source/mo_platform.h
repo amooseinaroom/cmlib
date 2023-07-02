@@ -12,7 +12,7 @@ extern "C" {
 #define mop_assert(x)
 #endif
 
-#if !defined mop_assert
+#if !defined mop_require
 #define mop_require(x) (x)
 #endif
 
@@ -41,15 +41,26 @@ const mop_b8 mop_true  = 1;
 
 #define mop_carray_count(static_array) (sizeof(static_array) / sizeof(*(static_array)))
 
+#if !defined mop_u8_array_type
+#define mop_u8_array_type mop_u8_array
+
 typedef struct
 {
     mop_u8    *base;
     mop_usize count;
 } mop_u8_array;
 
+#endif
+
 typedef mop_u8_array mop_string;
 
-#define mop_s(static_string) (string) { static_string, carray_count(static_string) - 1 }
+#ifdef __cplusplus
+#define mop_struct_literal(name)
+#else
+#define mop_struct_literal(name) (name)
+#endif
+
+#define mop_s(static_string) mop_struct_literal(string) { static_string, mop_carray_count(static_string) - 1 }
 #define mop_fs(text) (int) (text).count, (char *) (text).base
 
 const mop_string mop_string_empty = {0};
@@ -113,8 +124,8 @@ mop_write_file_signature;
 
 #endif
 
-#if defined mop_IMPLEMENTATION
-#undef mop_IMPLEMENTATION
+#if defined mop_implementation
+#undef mop_implementation
 
 #include <windows.h>
 
@@ -141,8 +152,8 @@ struct mop_platform
 
 struct mop_window
 {
-    HANDLE handle;
-    HDC    device_context;
+    HWND handle;
+    HDC  device_context;
 };
 
 mop_cstring mop_win32_window_class_name = "window class";
@@ -165,36 +176,36 @@ LRESULT CALLBACK mop_win32_window_callback(HWND window_handle, UINT msg, WPARAM 
 
 mop_init_signature
 {
-    HINSTANCE instance = (HINSTANCE) GetModuleHandleA(null);
+    HINSTANCE instance = (HINSTANCE) GetModuleHandleA(mop_null);
 
     WNDCLASS window_class = {0};
     window_class.lpfnWndProc   = mop_win32_window_callback;
     window_class.hInstance     = instance;
     window_class.lpszClassName = mop_win32_window_class_name;
-    window_class.hCursor       = LoadCursorA(null, IDC_ARROW);
+    window_class.hCursor       = LoadCursorA(mop_null, IDC_ARROW);
     window_class.hbrBackground = (HBRUSH) COLOR_BACKGROUND;
     window_class.style         = CS_OWNDC;
 
-    require(RegisterClass(&window_class));
+    mop_require(RegisterClass(&window_class));
 }
 
 mop_window_init_signature
 {
-    assert(!window->handle);
+    mop_assert(!window->handle);
 
-    window->handle = CreateWindowExA(0, mop_win32_window_class_name, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, null, null, (HINSTANCE) GetModuleHandleA(null), null);
-    require(window->handle);
+    window->handle = CreateWindowExA(0, mop_win32_window_class_name, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, mop_null, mop_null, (HINSTANCE) GetModuleHandleA(mop_null), mop_null);
+    mop_require(window->handle);
 
     ShowWindow(window->handle, SW_SHOW);
 
     window->device_context = GetDC(window->handle);
-    require(window->device_context);
+    mop_require(window->device_context);
 }
 
 mop_window_get_size_signature
 {
     RECT client_rect;
-    require(GetClientRect(window->handle, &client_rect));
+    mop_require(GetClientRect(window->handle, &client_rect));
 
     mop_window_size size;
     size.width  = client_rect.right - client_rect.left;
@@ -204,7 +215,7 @@ mop_window_get_size_signature
 
 void mop_win32_add_character(mop_u32 code, mop_b8 is_symbol)
 {
-    if (global_platform.character_count < carray_count(global_platform.characters))
+    if (global_platform.character_count < mop_carray_count(global_platform.characters))
     {
         mop_character *character = &global_platform.characters[global_platform.character_count];
         global_platform.character_count++;
@@ -221,19 +232,19 @@ void mop_win32_add_character(mop_u32 code, mop_b8 is_symbol)
 mop_handle_messages_signature
 {
     // previous quit message was ignored so we clear it
-    global_platform.do_quit = false;
+    global_platform.do_quit = mop_false;
 
     global_platform.character_count = 0;
     global_platform.missed_character_count = 0;
 
     MSG msg = {0};
-    while (PeekMessageA(&msg, null, 0, 0, PM_REMOVE))
+    while (PeekMessageA(&msg, mop_null, 0, 0, PM_REMOVE))
     {
         switch (msg.message)
         {
         case WM_QUIT:
         {
-            global_platform.do_quit = true;
+            global_platform.do_quit = mop_true;
         } break;
 
         case WM_KEYDOWN:
@@ -243,17 +254,17 @@ mop_handle_messages_signature
             {
                 case VK_BACK:
                 {
-                    mop_win32_add_character(mop_character_symbol_backspace, true);
+                    mop_win32_add_character(mop_character_symbol_backspace, mop_true);
                 } break;
 
                 case VK_DELETE:
                 {
-                    mop_win32_add_character(mop_character_symbol_delete, true);
+                    mop_win32_add_character(mop_character_symbol_delete, mop_true);
                 } break;
 
                 case VK_RETURN:
                 {
-                    mop_win32_add_character(mop_character_symbol_newline, true);
+                    mop_win32_add_character(mop_character_symbol_newline, mop_true);
                 } break;
             }
 
@@ -262,7 +273,7 @@ mop_handle_messages_signature
         case WM_CHAR:
         {
             if (msg.wParam >= ' ')
-                mop_win32_add_character(msg.wParam, false);
+                mop_win32_add_character(msg.wParam, mop_false);
         } break;
         }
 
@@ -277,35 +288,35 @@ mop_get_file_byte_count_signature
     if (!GetFileAttributesExA(path, GetFileExInfoStandard, &data))
     {
         mop_s32 error = GetLastError();
-        require(error == ERROR_FILE_NOT_FOUND);
+        mop_require(error == ERROR_FILE_NOT_FOUND);
 
-        return (mop_get_file_byte_count_result) {0};
+        return mop_struct_literal(mop_get_file_byte_count_result) {0};
     }
 
     mop_u64 byte_count = (mop_u64) data.nFileSizeHigh << 32 | data.nFileSizeLow;
-    return (mop_get_file_byte_count_result) { byte_count, true };
+    return mop_struct_literal(mop_get_file_byte_count_result) { byte_count, mop_true };
 }
 
 mop_read_file_signature
 {
-    HANDLE handle = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, null);
+    HANDLE handle = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, mop_null, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, mop_null);
     if (handle == INVALID_HANDLE_VALUE)
     {
         mop_s32 error = GetLastError();
-        require(error == ERROR_FILE_NOT_FOUND);
+        mop_require(error == ERROR_FILE_NOT_FOUND);
 
-        return (mop_read_file_result) {0};
+        return mop_struct_literal(mop_read_file_result) {0};
     }
 
     mop_u32 high32;
-    mop_u32 low32 = GetFileSize(handle, &high32);
+    mop_u32 low32 = GetFileSize(handle, (DWORD *) &high32);
 
     mop_u64 byte_count = (mop_u64) high32 << 32 | low32;
-    assert(byte_count <= buffer.count);
+    mop_assert(byte_count <= buffer.count);
 
-    mop_read_file_result result = { { buffer.base, byte_count }, true };
+    mop_read_file_result result = { { buffer.base, byte_count }, mop_true };
 
-    u8 *base = buffer.base;
+    mop_u8 *base = buffer.base;
     while (byte_count)
     {
         mop_u32 read_count;
@@ -314,7 +325,7 @@ mop_read_file_signature
         else
             read_count = byte_count;
 
-        require(ReadFile(handle, base, read_count, null, null));
+        mop_require(ReadFile(handle, base, read_count, mop_null, mop_null));
         base       += read_count;
         byte_count -= read_count;
     }
@@ -324,13 +335,13 @@ mop_read_file_signature
 
 mop_write_file_signature
 {
-    HANDLE handle = CreateFile(path, GENERIC_WRITE, 0, null, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, null);
+    HANDLE handle = CreateFile(path, GENERIC_WRITE, 0, mop_null, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, mop_null);
     if (handle == INVALID_HANDLE_VALUE)
     {
         mop_s32 error = GetLastError();
-        require(error == ERROR_FILE_NOT_FOUND);
+        mop_require(error == ERROR_FILE_NOT_FOUND);
 
-        return false;
+        return mop_false;
     }
 
     while (data.count)
@@ -341,12 +352,12 @@ mop_write_file_signature
         else
             write_count = (mop_u32) data.count;
 
-        require(WriteFile(handle, data.base, write_count, null, null));
+        mop_require(WriteFile(handle, data.base, write_count, mop_null, mop_null));
         data.base  += write_count;
         data.count -= write_count;
     }
 
-    return true;
+    return mop_true;
 }
 
 #endif
