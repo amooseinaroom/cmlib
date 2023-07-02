@@ -101,6 +101,8 @@ typedef struct
 enum mop_character_symbol;
 typedef enum mop_character_symbol mop_character_symbol;
 
+extern mop_platform global_platform;
+
 #define mop_init_signature void mop_init()
 mop_init_signature;
 
