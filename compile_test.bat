@@ -1,8 +1,8 @@
 @echo off
 
-set source=%cd%\source\mo_string.h %cd%\source\mo_platform.h
+set source=%cd%\source\mo_string.h %cd%\source\mo_platform.h %cd%\source\mo_text_edit.h
 set includes=/I %cd%\lib
-set options=%source% /Dmos_implementation /Dmop_implementation /nologo /Zi /Od /DEBUG %includes%
+set options=%source% /Dmos_implementation /Dmop_implementation /Dmote_implementation /nologo /Zi /Od /DEBUG %includes%
 
 if not exist build mkdir build
 
