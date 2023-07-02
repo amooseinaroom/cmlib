@@ -50,6 +50,10 @@ typedef struct
     mop_usize count;
 } mop_u8_array;
 
+#else
+
+typedef mop_u8_array_type mop_u8_array;
+
 #endif
 
 typedef mop_u8_array mop_string;

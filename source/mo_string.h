@@ -44,6 +44,10 @@ typedef struct
     mos_usize count;
 } mos_u8_array;
 
+#else
+
+typedef mos_u8_array_type mos_u8_array;
+
 #endif
 
 typedef mos_u8_array mos_string;
