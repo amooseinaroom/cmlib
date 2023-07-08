@@ -99,11 +99,11 @@ mos_parse_u64_signature;
 #define mos_parse_s64_ex_signature mos_b8 mos_parse_s64_ex(mos_s64 *result, mos_string *iterator, mos_u8 base)
 mos_parse_s64_ex_signature;
 
-#define mos_parse_s64_signature mos_b8 mos_parse_mos_s64(mos_s64 *result, mos_string *iterator)
+#define mos_parse_s64_signature mos_b8 mos_parse_s64(mos_s64 *result, mos_string *iterator)
 mos_parse_s64_signature;
 
-#define mos_buffer_to_text_signature mos_string mos_buffer_to_text(mos_string_buffer buffer)
-mos_buffer_to_text_signature;
+#define mos_buffer_to_string_signature mos_string mos_buffer_to_string(mos_string_buffer buffer)
+mos_buffer_to_string_signature;
 
 #define mos_write_signature mos_string mos_write(mos_string_buffer *buffer, mos_cstring format, ...)
 mos_write_signature;
@@ -286,7 +286,7 @@ mos_parse_s64_ex_signature
     return ok;
 }
 
-mos_buffer_to_text_signature
+mos_buffer_to_string_signature
 {
     return mos_t(buffer.base, buffer.used_count);
 }

@@ -77,8 +77,15 @@ typedef struct mop_window mop_window;
 
 typedef struct
 {
-    mop_s32 width, height;
-} mop_window_size;
+    mop_s32 x;
+    mop_s32 y;
+} mop_point;
+
+typedef struct
+{
+    mop_point size;
+    mop_point relative_mouse_position;
+} mop_window_info;
 
 typedef struct
 {
@@ -103,14 +110,32 @@ typedef enum mop_character_symbol mop_character_symbol;
 
 extern mop_platform global_platform;
 
+enum mop_key;
+
+typedef union
+{
+    struct
+    {
+        b8 is_active:                1;
+        u8 half_transition_count:    6;
+        b8 half_transition_overflow: 1;
+    };
+
+    mop_u8 value;
+} mop_key_state;
+
+typedef enum mop_key mop_key;
+
+struct mop_platform;
+
 #define mop_init_signature void mop_init()
 mop_init_signature;
 
 #define mop_window_init_signature void mop_window_init(mop_window *window, mop_cstring title)
 mop_window_init_signature;
 
-#define mop_window_get_size_signature mop_window_size mop_window_get_size(mop_window *window)
-mop_window_get_size_signature;
+#define mop_window_get_info_signature mop_window_info mop_window_get_info(mop_window *window)
+mop_window_get_info_signature;
 
 #define mop_handle_messages_signature void mop_handle_messages()
 mop_handle_messages_signature;
@@ -140,11 +165,21 @@ mop_write_file_signature;
 
 enum mop_character_symbol
 {
-    mop_character_symbol_return,
     mop_character_symbol_backspace,
     mop_character_symbol_escape,
     mop_character_symbol_delete,
     mop_character_symbol_newline,
+};
+
+enum mop_key
+{
+    mop_key_return = VK_RETURN,
+    mop_key_backspace = VK_BACK,
+    mop_key_escape = VK_ESCAPE,
+    mop_key_delete = VK_DELETE,
+    mop_key_mouse_left = VK_LBUTTON,
+    mop_key_mouse_middle = VK_MBUTTON,
+    mop_key_mouse_right = VK_RBUTTON,
 };
 
 struct mop_platform
@@ -153,7 +188,17 @@ struct mop_platform
     mop_u32 character_count;
     mop_u32 missed_character_count;
 
+    mop_key_state keys[256];
+
+    mop_point previous_mouse_position;
+    mop_point mouse_position;
+
     mop_b8 do_quit;
+
+    struct
+    {
+        POINT cursor;
+    } win32;
 };
 
 struct mop_window
@@ -208,15 +253,22 @@ mop_window_init_signature
     mop_require(window->device_context);
 }
 
-mop_window_get_size_signature
+mop_window_get_info_signature
 {
     RECT client_rect;
     mop_require(GetClientRect(window->handle, &client_rect));
 
-    mop_window_size size;
-    size.width  = client_rect.right - client_rect.left;
-    size.height = client_rect.bottom - client_rect.top;
-    return size;
+    POINT window_cursor = global_platform.win32.cursor;
+    ScreenToClient(window->handle, &window_cursor);
+
+    mop_window_info info;
+    info.size.x = client_rect.right - client_rect.left;
+    info.size.y = client_rect.bottom - client_rect.top;
+
+    info.relative_mouse_position.x = window_cursor.x;
+    info.relative_mouse_position.y = info.size.y - window_cursor.y;
+
+    return info;
 }
 
 void mop_win32_add_character(mop_u32 code, mop_b8 is_symbol)
@@ -235,6 +287,25 @@ void mop_win32_add_character(mop_u32 code, mop_b8 is_symbol)
     }
 }
 
+void mop_key_event_update(u32 key, mop_b8 is_active)
+{
+    mop_assert(key < mop_carray_count(global_platform.keys));
+
+    mop_assert(global_platform.keys[key].is_active != is_active);
+
+    if (global_platform.keys[key].half_transition_count == 63)
+        global_platform.keys[key].half_transition_overflow = mop_true;
+
+    global_platform.keys[key].half_transition_count += 1;
+    global_platform.keys[key].is_active = is_active;
+}
+
+void mop_key_poll_update(u32 key, mop_b8 is_active)
+{
+    if (global_platform.keys[key].is_active != is_active)
+        mop_key_event_update(key, is_active);
+}
+
 mop_handle_messages_signature
 {
     // previous quit message was ignored so we clear it
@@ -242,6 +313,12 @@ mop_handle_messages_signature
 
     global_platform.character_count = 0;
     global_platform.missed_character_count = 0;
+
+    for (u32 i = 0; i < mop_carray_count(global_platform.keys); i++)
+    {
+        global_platform.keys[i].half_transition_count    = 0;
+        global_platform.keys[i].half_transition_overflow = mop_false;
+    }
 
     MSG msg = {0};
     while (PeekMessageA(&msg, mop_null, 0, 0, PM_REMOVE))
@@ -251,6 +328,12 @@ mop_handle_messages_signature
         case WM_QUIT:
         {
             global_platform.do_quit = mop_true;
+        } break;
+
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+        {
+            mop_key_event_update(msg.wParam, mop_false);
         } break;
 
         case WM_KEYDOWN:
@@ -274,6 +357,7 @@ mop_handle_messages_signature
                 } break;
             }
 
+            mop_key_event_update(msg.wParam, mop_true);
         } break;
 
         case WM_CHAR:
@@ -286,6 +370,22 @@ mop_handle_messages_signature
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    mop_key_poll_update(VK_LBUTTON, GetAsyncKeyState(VK_LBUTTON) >> 15);
+    mop_key_poll_update(VK_MBUTTON, GetAsyncKeyState(VK_MBUTTON) >> 15);
+    mop_key_poll_update(VK_RBUTTON, GetAsyncKeyState(VK_RBUTTON) >> 15);
+
+    POINT cursor;
+    GetCursorPos(&cursor);
+    global_platform.win32.cursor = cursor;
+
+    HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY);
+    MONITORINFO monitor_info = { sizeof(MONITORINFO) };
+    GetMonitorInfoA(monitor, &monitor_info);
+
+    global_platform.previous_mouse_position = global_platform.mouse_position;
+    global_platform.mouse_position.x = cursor.x;
+    global_platform.mouse_position.y = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top - cursor.y;
 }
 
 mop_get_file_byte_count_signature

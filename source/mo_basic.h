@@ -11,6 +11,8 @@ extern "C" {
 #define assert(x)  mop_assert(x)
 #define require(x) mop_require(x)
 
+#define cases_complete(value) default: assert(0)
+
 // for compatibilty with other libs
 #define mos_assert(x)  assert(x)
 #define mote_assert(x) assert(x)
@@ -50,6 +52,7 @@ typedef struct
 } u8_array;
 
 // for compatibilty with other libs
+#define mop_u8_array_type  u8_array
 #define mos_u8_array_type  u8_array
 #define mote_u8_array_type u8_array
 
