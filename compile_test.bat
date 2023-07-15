@@ -1,18 +1,26 @@
 @echo off
 
-set source=%cd%\source\mo_string.h %cd%\source\mo_platform.h %cd%\source\mo_text_edit.h
+set source=%cd%\source\mo_string.h %cd%\source\mo_platform.h %cd%\source\mo_text_edit.h %cd%\source\mo_memory_arena.h
 set includes=/I %cd%\lib
-set options=%source% /Dmos_implementation /Dmop_implementation /Dmote_implementation /nologo /Zi /Od /DEBUG %includes%
+set options=/Dmos_implementation /Dmop_implementation /Dmote_implementation /Dmoma_implementation /nologo /Zi /Od /DEBUG %includes%
 
 if not exist build mkdir build
 
 pushd build
 
-rem test C compilation
-cl /c /TC %options%
+echo test C compilation
+cl /c /TC %source% %options%
+echo test C ui compilation
+cl /c /TC %cd%\..\source\mo_ui.h %options% /Dmoui_implementation
+echo test C ui gl compilation
+cl /c /TC %cd%\..\source\mo_ui.h %options% /Dmoui_implementation /Dmoui_gl_implementation
 
-rem test C++ compilation
-cl /c /TP %options%
+echo test C++ compilation
+cl /c /TP %source% %options%
+echo test C ui compilation
+cl /c /TP %cd%\..\source\mo_ui.h %options% /Dmoui_implementation
+echo test C ui gl compilation
+cl /c /TP %cd%\..\source\mo_ui.h %options% /Dmoui_implementation /Dmoui_gl_implementation
 
 popd
 

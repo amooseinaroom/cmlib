@@ -108,17 +108,15 @@ typedef struct
 enum mop_character_symbol;
 typedef enum mop_character_symbol mop_character_symbol;
 
-extern mop_platform global_platform;
-
 enum mop_key;
 
 typedef union
 {
     struct
     {
-        b8 is_active:                1;
-        u8 half_transition_count:    6;
-        b8 half_transition_overflow: 1;
+        mop_b8 is_active:                1;
+        mop_u8 half_transition_count:    6;
+        mop_b8 half_transition_overflow: 1;
     };
 
     mop_u8 value;
@@ -128,25 +126,28 @@ typedef enum mop_key mop_key;
 
 struct mop_platform;
 
-#define mop_init_signature void mop_init()
+#define mop_init_signature void mop_init(mop_platform *platform)
 mop_init_signature;
 
-#define mop_window_init_signature void mop_window_init(mop_window *window, mop_cstring title)
+#define mop_window_init_signature void mop_window_init(mop_platform *platform, mop_window *window, mop_cstring title)
 mop_window_init_signature;
 
-#define mop_window_get_info_signature mop_window_info mop_window_get_info(mop_window *window)
+#define mop_window_get_info_signature mop_window_info mop_window_get_info(mop_platform *platform, mop_window *window)
 mop_window_get_info_signature;
 
-#define mop_handle_messages_signature void mop_handle_messages()
+#define mop_handle_messages_signature void mop_handle_messages(mop_platform *platform)
 mop_handle_messages_signature;
 
-#define mop_get_file_byte_count_signature mop_get_file_byte_count_result mop_get_file_byte_count(mop_cstring path)
+#define mop_get_realtime_counter_signature mop_u64 mop_get_realtime_counter(mop_platform *platform)
+mop_get_realtime_counter_signature;
+
+#define mop_get_file_byte_count_signature mop_get_file_byte_count_result mop_get_file_byte_count(mop_platform *platform, mop_cstring path)
 mop_get_file_byte_count_signature;
 
-#define mop_read_file_signature mop_read_file_result mop_read_file(mop_u8_array buffer, mop_cstring path)
+#define mop_read_file_signature mop_read_file_result mop_read_file(mop_platform *platform, mop_u8_array buffer, mop_cstring path)
 mop_read_file_signature;
 
-#define mop_write_file_signature mop_b8 mop_write_file(mop_cstring path, mop_u8_array data)
+#define mop_write_file_signature mop_b8 mop_write_file(mop_platform *platform, mop_cstring path, mop_u8_array data)
 mop_write_file_signature;
 
 #ifdef __cplusplus
@@ -193,7 +194,13 @@ struct mop_platform
     mop_point previous_mouse_position;
     mop_point mouse_position;
 
+    mop_u64 realtime_counter_ticks_per_second;
+    mop_u64 last_realtime_counter;
+
+    mop_f32 delta_seconds;
+
     mop_b8 do_quit;
+
 
     struct
     {
@@ -251,6 +258,8 @@ mop_window_init_signature
 
     window->device_context = GetDC(window->handle);
     mop_require(window->device_context);
+
+    mop_require(QueryPerformanceFrequency((LARGE_INTEGER *) &platform->realtime_counter_ticks_per_second));
 }
 
 mop_window_get_info_signature
@@ -258,7 +267,7 @@ mop_window_get_info_signature
     RECT client_rect;
     mop_require(GetClientRect(window->handle, &client_rect));
 
-    POINT window_cursor = global_platform.win32.cursor;
+    POINT window_cursor = platform->win32.cursor;
     ScreenToClient(window->handle, &window_cursor);
 
     mop_window_info info;
@@ -271,55 +280,55 @@ mop_window_get_info_signature
     return info;
 }
 
-void mop_win32_add_character(mop_u32 code, mop_b8 is_symbol)
+void mop_win32_add_character(mop_platform *platform, mop_u32 code, mop_b8 is_symbol)
 {
-    if (global_platform.character_count < mop_carray_count(global_platform.characters))
+    if (platform->character_count < mop_carray_count(platform->characters))
     {
-        mop_character *character = &global_platform.characters[global_platform.character_count];
-        global_platform.character_count++;
+        mop_character *character = &platform->characters[platform->character_count];
+        platform->character_count++;
 
         character->code = code;
         character->is_symbol = is_symbol;
     }
     else
     {
-        global_platform.missed_character_count++;
+        platform->missed_character_count++;
     }
 }
 
-void mop_key_event_update(u32 key, mop_b8 is_active)
+void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
 {
-    mop_assert(key < mop_carray_count(global_platform.keys));
+    mop_assert(key < mop_carray_count(platform->keys));
 
-    mop_assert(global_platform.keys[key].is_active != is_active);
+    mop_assert(platform->keys[key].is_active != is_active);
 
-    if (global_platform.keys[key].half_transition_count == 63)
-        global_platform.keys[key].half_transition_overflow = mop_true;
+    if (platform->keys[key].half_transition_count == 63)
+        platform->keys[key].half_transition_overflow = mop_true;
 
-    global_platform.keys[key].half_transition_count += 1;
-    global_platform.keys[key].is_active = is_active;
+    platform->keys[key].half_transition_count += 1;
+    platform->keys[key].is_active = is_active;
 }
 
-void mop_key_poll_update(u32 key, mop_b8 is_active)
+void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
 {
-    mop_assert(key < mop_carray_count(global_platform.keys));
+    mop_assert(key < mop_carray_count(platform->keys));
 
-    if (global_platform.keys[key].is_active != is_active)
-        mop_key_event_update(key, is_active);
+    if (platform->keys[key].is_active != is_active)
+        mop_key_event_update(platform, key, is_active);
 }
 
 mop_handle_messages_signature
 {
     // previous quit message was ignored so we clear it
-    global_platform.do_quit = mop_false;
+    platform->do_quit = mop_false;
 
-    global_platform.character_count = 0;
-    global_platform.missed_character_count = 0;
+    platform->character_count = 0;
+    platform->missed_character_count = 0;
 
-    for (u32 i = 0; i < mop_carray_count(global_platform.keys); i++)
+    for (mop_u32 i = 0; i < mop_carray_count(platform->keys); i++)
     {
-        global_platform.keys[i].half_transition_count    = 0;
-        global_platform.keys[i].half_transition_overflow = mop_false;
+        platform->keys[i].half_transition_count    = 0;
+        platform->keys[i].half_transition_overflow = mop_false;
     }
 
     MSG msg = {0};
@@ -329,13 +338,13 @@ mop_handle_messages_signature
         {
         case WM_QUIT:
         {
-            global_platform.do_quit = mop_true;
+            platform->do_quit = mop_true;
         } break;
 
         case WM_KEYUP:
         case WM_SYSKEYUP:
         {
-            mop_key_event_update(msg.wParam, mop_false);
+            mop_key_event_update(platform, msg.wParam, mop_false);
         } break;
 
         case WM_KEYDOWN:
@@ -345,27 +354,27 @@ mop_handle_messages_signature
             {
                 case VK_BACK:
                 {
-                    mop_win32_add_character(mop_character_symbol_backspace, mop_true);
+                    mop_win32_add_character(platform, mop_character_symbol_backspace, mop_true);
                 } break;
 
                 case VK_DELETE:
                 {
-                    mop_win32_add_character(mop_character_symbol_delete, mop_true);
+                    mop_win32_add_character(platform, mop_character_symbol_delete, mop_true);
                 } break;
 
                 case VK_RETURN:
                 {
-                    mop_win32_add_character(mop_character_symbol_newline, mop_true);
+                    mop_win32_add_character(platform, mop_character_symbol_newline, mop_true);
                 } break;
             }
 
-            mop_key_event_update(msg.wParam, mop_true);
+            mop_key_event_update(platform, msg.wParam, mop_true);
         } break;
 
         case WM_CHAR:
         {
             if (msg.wParam >= ' ')
-                mop_win32_add_character(msg.wParam, mop_false);
+                mop_win32_add_character(platform, msg.wParam, mop_false);
         } break;
         }
 
@@ -373,21 +382,33 @@ mop_handle_messages_signature
         DispatchMessage(&msg);
     }
 
-    mop_key_poll_update(VK_LBUTTON, (GetAsyncKeyState(VK_LBUTTON) >> 15) & 1);
-    mop_key_poll_update(VK_MBUTTON, (GetAsyncKeyState(VK_MBUTTON) >> 15) & 1);
-    mop_key_poll_update(VK_RBUTTON, (GetAsyncKeyState(VK_RBUTTON) >> 15) & 1);
+    mop_key_poll_update(platform, VK_LBUTTON, (GetAsyncKeyState(VK_LBUTTON) >> 15) & 1);
+    mop_key_poll_update(platform, VK_MBUTTON, (GetAsyncKeyState(VK_MBUTTON) >> 15) & 1);
+    mop_key_poll_update(platform, VK_RBUTTON, (GetAsyncKeyState(VK_RBUTTON) >> 15) & 1);
 
     POINT cursor;
     GetCursorPos(&cursor);
-    global_platform.win32.cursor = cursor;
+    platform->win32.cursor = cursor;
 
     HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY);
     MONITORINFO monitor_info = { sizeof(MONITORINFO) };
     GetMonitorInfoA(monitor, &monitor_info);
 
-    global_platform.previous_mouse_position = global_platform.mouse_position;
-    global_platform.mouse_position.x = cursor.x;
-    global_platform.mouse_position.y = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top - cursor.y;
+    platform->previous_mouse_position = platform->mouse_position;
+    platform->mouse_position.x = cursor.x;
+    platform->mouse_position.y = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top - cursor.y;
+
+    mop_u64 realtime_counter = mop_get_realtime_counter(platform);
+    platform->delta_seconds = (mop_f32) (realtime_counter - platform->last_realtime_counter) / platform->realtime_counter_ticks_per_second;
+    platform->last_realtime_counter = realtime_counter;
+}
+
+mop_get_realtime_counter_signature
+{
+    mop_u64 counter;
+    mop_require(QueryPerformanceCounter((LARGE_INTEGER *) &counter));
+
+    return counter;
 }
 
 mop_get_file_byte_count_signature

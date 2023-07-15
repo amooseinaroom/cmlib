@@ -58,6 +58,8 @@ array_type(u8_array, u8);
 #define mop_u8_array_type  u8_array
 #define mos_u8_array_type  u8_array
 #define mote_u8_array_type u8_array
+#define moui_u8_array_type u8_array
+#define moma_u8_array_type u8_array
 
 typedef u8_array string;
 
