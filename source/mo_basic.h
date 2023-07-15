@@ -45,11 +45,14 @@ const b8 true  = 1;
 
 #define carray_count(static_array) (sizeof(static_array) / sizeof(*(static_array)))
 
-typedef struct
-{
-    u8    *base;
-    usize count;
-} u8_array;
+#define array_type(name, type) \
+typedef struct \
+{ \
+    type  *base; \
+    usize count; \
+} name
+
+array_type(u8_array, u8);
 
 // for compatibilty with other libs
 #define mop_u8_array_type  u8_array
@@ -57,6 +60,13 @@ typedef struct
 #define mote_u8_array_type u8_array
 
 typedef u8_array string;
+
+array_type(string_array, string);
+
+#define copy_items(to, from, count) copy((u8 *) (to), (u8 *) (from), sizeof(*(to)) * count)
+
+#define copy_signature void copy(u8 *to, u8 *from, usize byte_count)
+copy_signature;
 
 #ifdef __cplusplus
 #define struct_literal(name)
@@ -70,5 +80,24 @@ typedef u8_array string;
 #ifdef __cplusplus
 }
 #endif
+
+#endif
+
+#if defined mob_implementation
+#undef mob_implementation
+
+copy_signature
+{
+    if (to >= from)
+    {
+        for (usize i = 0; i < byte_count; i++)
+            to[i] = from[i];
+    }
+    else
+    {
+        for (usize i = 0; i < byte_count; i++)
+            to[byte_count - 1 - i] = from[byte_count - 1 - i];
+    }
+}
 
 #endif

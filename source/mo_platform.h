@@ -302,6 +302,8 @@ void mop_key_event_update(u32 key, mop_b8 is_active)
 
 void mop_key_poll_update(u32 key, mop_b8 is_active)
 {
+    mop_assert(key < mop_carray_count(global_platform.keys));
+
     if (global_platform.keys[key].is_active != is_active)
         mop_key_event_update(key, is_active);
 }
@@ -371,9 +373,9 @@ mop_handle_messages_signature
         DispatchMessage(&msg);
     }
 
-    mop_key_poll_update(VK_LBUTTON, GetAsyncKeyState(VK_LBUTTON) >> 15);
-    mop_key_poll_update(VK_MBUTTON, GetAsyncKeyState(VK_MBUTTON) >> 15);
-    mop_key_poll_update(VK_RBUTTON, GetAsyncKeyState(VK_RBUTTON) >> 15);
+    mop_key_poll_update(VK_LBUTTON, (GetAsyncKeyState(VK_LBUTTON) >> 15) & 1);
+    mop_key_poll_update(VK_MBUTTON, (GetAsyncKeyState(VK_MBUTTON) >> 15) & 1);
+    mop_key_poll_update(VK_RBUTTON, (GetAsyncKeyState(VK_RBUTTON) >> 15) & 1);
 
     POINT cursor;
     GetCursorPos(&cursor);

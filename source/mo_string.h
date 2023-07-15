@@ -118,6 +118,7 @@ mos_write_va_signature;
 #endif
 
 #if defined mos_implementation
+#undef mos_implementation
 
 mos_advance_signature
 {

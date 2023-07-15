@@ -72,7 +72,6 @@ typedef struct
 
 typedef enum
 {
-    mote_character_symbol_return,
     mote_character_symbol_backspace,
     mote_character_symbol_escape,
     mote_character_symbol_delete,
