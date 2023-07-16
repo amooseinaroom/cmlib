@@ -216,8 +216,6 @@ struct mop_window
 
 mop_cstring mop_win32_window_class_name = "window class";
 
-mop_platform global_platform;
-
 LRESULT CALLBACK mop_win32_window_callback(HWND window_handle, UINT msg, WPARAM w_param, LPARAM l_param)
 {
     switch (msg)
