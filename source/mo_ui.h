@@ -212,6 +212,8 @@ typedef struct
     moui_s32 min_layer;
     moui_s32 max_layer;
 
+    moui_box2 scissor_box;
+    moui_box2 used_box;
     moui_vec2 canvas_size;
 
 #if defined DEBUG
@@ -223,6 +225,9 @@ typedef struct
 // moui_renderer contains (moui_renderer_base base) as first field
 struct moui_renderer;
 typedef struct moui_renderer moui_renderer;
+
+struct moui_window;
+typedef struct moui_window moui_window;
 
 typedef struct
 {
@@ -297,11 +302,30 @@ moui_box_is_hot_signature;
 #define moui_init_signature void moui_init(moui_renderer *renderer, moui_quad *quads, moui_u32 quad_count, moui_texture *textures, moui_u32 texture_count, moui_command *commands, moui_u32 command_count)
 moui_init_signature;
 
+// window is expected to be initialized with the platform native information
+#define moui_window_init_signature void moui_window_init(moui_renderer *renderer, moui_window *window)
+moui_window_init_signature;
+
 #define moui_set_buffers_signature void moui_set_buffers(moui_renderer *renderer, moui_quad *quads, moui_u32 quad_count, moui_texture *textures, moui_u32 texture_count, moui_command *commands, moui_u32 command_count)
 moui_set_buffers_signature;
 
 #define moui_record_signature void moui_record(moui_renderer *renderer, moui_vec2 canvas_size)
 moui_record_signature;
+
+#define moui_set_scissor_box_signature moui_box2 moui_set_scissor_box(moui_renderer *renderer, moui_box2 scissor_box)
+moui_set_scissor_box_signature;
+
+#define moui_scissor_box_signature moui_b8 moui_scissor_box(moui_box2 scissor_box, moui_box2 *box, moui_box2 *texture_box)
+moui_scissor_box_signature;
+
+#define moui_scissor_signature moui_b8 moui_scissor(moui_renderer *renderer, moui_box2 *box, moui_box2 *texture_box)
+moui_scissor_signature;
+
+#define moui_used_box_begin_signature moui_box2 moui_used_box_begin(moui_renderer *renderer)
+moui_used_box_begin_signature;
+
+#define moui_used_box_end_signature moui_box2 moui_used_box_end(moui_renderer *renderer, moui_box2 begin_box)
+moui_used_box_end_signature;
 
 #define moui_set_command_signature moui_b8 moui_set_command(moui_renderer *renderer, moui_s32 layer, moui_u32 texture_index)
 moui_set_command_signature;
@@ -348,12 +372,20 @@ moui_print_signature;
 #define moui_printf_signature void moui_printf(moui_renderer *renderer, moui_simple_font font, moui_s32 layer, moui_rgba color, moui_text_cursor *cursor, moui_cstring format, ...)
 moui_printf_signature;
 
-// optional call before moui_execute to setup render api correctly, if you don't want to control it yourself
-#define moui_frame_begin_signature void moui_frame_begin(moui_renderer *renderer)
-moui_frame_begin_signature;
+// optional call to bind current window
+#define moui_default_render_begin_signature void moui_default_render_begin(moui_renderer *renderer, moui_window *window)
+moui_default_render_begin_signature;
+
+// optional call to setup rendering api
+#define moui_default_render_prepare_execute_signature void moui_default_render_prepare_execute(moui_renderer *renderer)
+moui_default_render_prepare_execute_signature;
 
 #define moui_execute_signature void moui_execute(moui_renderer *renderer)
 moui_execute_signature;
+
+// optional call to swap window buffers
+#define moui_default_render_end_signature void moui_default_render_end(moui_renderer *renderer, moui_window *window, moui_b8 wait_for_vsync)
+moui_default_render_end_signature;
 
 // utility
 
@@ -368,6 +400,18 @@ moui_s32_min_signature;
 
 #define moui_s32_max_signature moui_s32 moui_s32_max(moui_s32 a, moui_s32 b)
 moui_s32_max_signature;
+
+#define moui_f32_min_signature moui_f32 moui_f32_min(moui_f32 a, moui_f32 b)
+moui_f32_min_signature;
+
+#define moui_f32_max_signature moui_f32 moui_f32_max(moui_f32 a, moui_f32 b)
+moui_f32_max_signature;
+
+#define moui_box2_merge_signature moui_box2 moui_box2_merge(moui_box2 a, moui_box2 b)
+moui_box2_merge_signature;
+
+#define moui_box2_cut_signature moui_box2 moui_box2_cut(moui_box2 a, moui_box2 b)
+moui_box2_cut_signature;
 
 // optional interface
 
@@ -559,6 +603,7 @@ moui_box_line_is_hot_signature
 
 moui_box_is_hot_signature
 {
+    // TODO: use render scissor_box here to cut the box
     return moui_box_line_is_hot(box, state->previous_cursor, state->cursor);
 }
 
@@ -573,6 +618,11 @@ moui_box_is_hot_signature
 #pragma comment(lib, "gdi32")
 #pragma comment(lib, "user32")
 #pragma comment(lib, "opengl32")
+
+struct moui_window
+{
+    HDC device_context;
+};
 
 #else
 
@@ -657,20 +707,6 @@ void moui_win32_gl_window_init(HDC device_context)
     moui_require(SetPixelFormat(device_context, format, &format_descriptor));
 }
 
-void moui_win32_gl_window_bind(moui_renderer *renderer, HDC device_context)
-{
-    moui_assert(renderer->win32_gl_context);
-    wglMakeCurrent(device_context, renderer->win32_gl_context);
-
-    renderer->win32_gl_current_device_context = device_context;
-}
-
-void moui_win32_gl_frame_end(moui_renderer *renderer, HDC device_context, moui_b8 is_last_window_in_frame)
-{
-    moui_assert(renderer->win32_gl_current_device_context == device_context);
-    SwapBuffers(device_context);
-}
-
 moui_init_signature
 {
     *renderer = moui_struct_literal(moui_renderer) {0};
@@ -717,29 +753,36 @@ moui_init_signature
     //wglSwapIntervalEXT(1);
 }
 
-moui_record_signature
+moui_window_init_signature
 {
-    moui_assert(!renderer->base.is_recording);
-
-#if defined DEBUG
-    renderer->base.debug_is_recording = moui_true;
-#endif
-
-    renderer->base.quad_request_count = 0;
-    renderer->base.texture_request_count = 0;
-    renderer->base.command_request_count = 0;
-    renderer->base.canvas_size = canvas_size;
-
-    renderer->base.current_command.layer = 0;
-    renderer->base.current_command.texture_index = 0; // TODO: generate white texture
-    renderer->base.current_command.quad_count = 0;
-
-    // MAYBE: pick min and max properly
-    renderer->base.min_layer = 0;
-    renderer->base.max_layer = 0;
+    moui_assert(renderer->win32_gl_context); // call moui_init first
+    moui_assert(window->device_context);
+    moui_win32_gl_window_init(window->device_context);
 }
 
-moui_frame_begin_signature
+moui_default_render_begin_signature
+{
+    moui_assert(renderer->win32_gl_context); // call moui_init first
+    moui_assert(window->device_context);
+    // TODO: assert on moui_window_init being called
+
+    if (renderer->win32_gl_current_device_context != window->device_context)
+    {
+        wglMakeCurrent(window->device_context, renderer->win32_gl_context);
+        renderer->win32_gl_current_device_context = window->device_context;
+    }
+}
+
+moui_default_render_end_signature
+{
+    moui_assert(renderer->win32_gl_context); // call moui_init first
+    moui_assert(window->device_context);
+
+    moui_assert(renderer->win32_gl_current_device_context == window->device_context);
+    SwapBuffers(window->device_context);
+}
+
+moui_default_render_prepare_execute_signature
 {
     moui_gl_ckeck(glViewport(0, 0, renderer->base.canvas_size.x, renderer->base.canvas_size.y));
     moui_gl_ckeck(glScissor(0, 0, renderer->base.canvas_size.x, renderer->base.canvas_size.y));
@@ -833,17 +876,32 @@ struct moui_renderer
     moui_renderer_base base;
 };
 
+struct moui_window
+{
+    moui_u32 ignored;
+};
+
 moui_init_signature
 {
     moui_assert(0);
 }
 
-moui_record_signature
+moui_window_init_signature
 {
     moui_assert(0);
 }
 
-moui_frame_begin_signature
+moui_default_render_begin_signature
+{
+    moui_assert(0);
+}
+
+moui_default_render_end_signature
+{
+    moui_assert(0);
+}
+
+moui_default_render_prepare_execute_signature
 {
     moui_assert(0);
 }
@@ -855,6 +913,34 @@ moui_execute_signature
 
 #endif
 
+moui_record_signature
+{
+    moui_assert(!renderer->base.is_recording);
+
+#if defined DEBUG
+    renderer->base.debug_is_recording = moui_true;
+#endif
+
+    renderer->base.quad_request_count = 0;
+    renderer->base.texture_request_count = 0;
+    renderer->base.command_request_count = 0;
+    renderer->base.canvas_size = canvas_size;
+    renderer->base.scissor_box.min = moui_struct_literal(moui_vec2) {0};
+    renderer->base.scissor_box.max = canvas_size;
+
+    // inverted box
+    renderer->base.used_box.max = renderer->base.scissor_box.min;
+    renderer->base.used_box.min = renderer->base.scissor_box.max;
+
+    renderer->base.current_command.layer = 0;
+    renderer->base.current_command.texture_index = 0; // TODO: generate white texture
+    renderer->base.current_command.quad_count = 0;
+
+    // MAYBE: pick min and max properly
+    renderer->base.min_layer = 0;
+    renderer->base.max_layer = 0;
+}
+
 moui_set_buffers_signature
 {
     renderer->base.quads      = quads;
@@ -865,6 +951,69 @@ moui_set_buffers_signature
 
     renderer->base.commands      = commands;
     renderer->base.command_count = command_count;
+}
+
+moui_set_scissor_box_signature
+{
+    moui_box2 previous_scissor_box = renderer->base.scissor_box;
+    renderer->base.scissor_box = scissor_box;
+
+    return previous_scissor_box;
+}
+
+moui_scissor_box_signature
+{
+    moui_vec2 box_size = { box->max.x - box->min.x, box->max.y - box->min.y };
+
+    moui_f32 min_x_cut = moui_f32_max(scissor_box.min.x - box->min.x, 0);
+    moui_f32 max_x_cut = moui_f32_max(box->max.x - scissor_box.max.x, 0);
+    moui_f32 min_y_cut = moui_f32_max(scissor_box.min.y - box->min.y, 0);
+    moui_f32 max_y_cut = moui_f32_max(box->max.y - scissor_box.max.y, 0);
+
+    if ((box_size.x < (min_x_cut + max_x_cut)) || (box_size.y < (min_y_cut + max_y_cut)))
+        return moui_false;
+
+    box->min.x += min_x_cut;
+    box->max.x -= max_x_cut;
+    box->min.y += min_y_cut;
+    box->max.y -= max_y_cut;
+
+    moui_vec2 texture_size = { texture_box->max.x - texture_box->min.x, texture_box->max.y - texture_box->min.y };
+    moui_vec2 texture_scale = { texture_size.x / box_size.x, texture_size.y / box_size.y };
+    texture_box->min.x += min_x_cut * texture_scale.x;
+    texture_box->max.x -= max_x_cut * texture_scale.x;
+    texture_box->min.y += min_y_cut * texture_scale.y;
+    texture_box->max.y -= max_y_cut * texture_scale.y;
+
+    return moui_true;
+}
+
+moui_scissor_signature
+{
+    moui_b8 ok = moui_scissor_box(renderer->base.scissor_box, box, texture_box);
+    if (ok)
+        renderer->base.used_box = moui_box2_merge(renderer->base.used_box, *box);
+
+    return ok;
+}
+
+moui_used_box_begin_signature
+{
+    moui_box2 begin_box = renderer->base.used_box;
+    renderer->base.used_box.min.x = renderer->base.canvas_size.x;
+    renderer->base.used_box.max.x = 0;
+    renderer->base.used_box.min.y = renderer->base.canvas_size.y;
+    renderer->base.used_box.max.y = 0;
+
+    return begin_box;
+}
+
+moui_used_box_end_signature
+{
+    moui_box2 end_box = renderer->base.used_box;
+    renderer->base.used_box = moui_box2_merge(renderer->base.used_box, begin_box);
+
+    return end_box;
 }
 
 moui_set_command_signature
@@ -949,6 +1098,9 @@ moui_to_quad_colors_signature
 
 moui_add_texture_quad_signature
 {
+    if (!moui_scissor(renderer, &box, &texture_box))
+        return;
+
     moui_quad quad;
     quad.vertices[0].color    = colors.values[0];
     quad.vertices[0].position = moui_struct_literal(moui_vec2) { box.min.x, box.min.y };
@@ -1138,6 +1290,44 @@ moui_s32_max_signature
         return a;
     else
         return b;
+}
+
+moui_f32_min_signature
+{
+    if (a <= b)
+        return a;
+    else
+        return b;
+}
+
+moui_f32_max_signature
+{
+    if (a > b)
+        return a;
+    else
+        return b;
+}
+
+moui_box2_merge_signature
+{
+    moui_box2 result;
+    result.min.x = moui_f32_min(a.min.x, b.min.x);
+    result.max.x = moui_f32_max(a.max.x, b.max.x);
+    result.min.y = moui_f32_min(a.min.y, b.min.y);
+    result.max.y = moui_f32_max(a.max.y, b.max.y);
+
+    return result;
+}
+
+moui_box2_cut_signature
+{
+    moui_box2 result;
+    result.min.x = moui_f32_max(a.min.x, b.min.x);
+    result.max.x = moui_f32_min(a.max.x, b.max.x);
+    result.min.y = moui_f32_max(a.min.y, b.min.y);
+    result.max.y = moui_f32_min(a.max.y, b.max.y);
+
+    return result;
 }
 
 #if defined __STB_INCLUDE_STB_TRUETYPE_H__
@@ -1344,3 +1534,4 @@ moui_resize_buffers_signature
 #endif
 
 #endif
+
