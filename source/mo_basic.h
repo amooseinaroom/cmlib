@@ -1,5 +1,6 @@
 
 // some basic types
+// this is my personal basic setup for typenames and some common macros
 
 #if !defined mob_h
 #define mob_h
@@ -16,6 +17,8 @@ extern "C" {
 // for compatibilty with other libs
 #define mos_assert(x)  assert(x)
 #define mote_assert(x) assert(x)
+#define moui_assert(x) assert(x)
+#define moma_assert(x) assert(x)
 
 typedef unsigned char      u8;
 typedef unsigned short     u16;
@@ -70,13 +73,19 @@ array_type(string_array, string);
 #define copy_signature void copy(u8 *to, u8 *from, usize byte_count)
 copy_signature;
 
+// sl - struct literal
+// to help with compatibility between c and c++
 #ifdef __cplusplus
-#define struct_literal(name)
+#define sl(name)
 #else
-#define struct_literal(name) (name)
+#define sl(name) (name)
 #endif
 
-#define s(static_string) struct_literal(string) { (u8 *) static_string, carray_count(static_string) - 1 }
+// string out of c string literal
+#define s(static_string) sl(string) { (u8 *) static_string, carray_count(static_string) - 1 }
+
+// format string
+// example: printf("%.*s", fs(my_string));
 #define fs(text) (int) (text).count, (char *) (text).base
 
 #ifdef __cplusplus

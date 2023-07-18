@@ -37,6 +37,9 @@ extern "C" {
 
 #define moui_cases_complete(value) default: moui_assert(0)
 
+// you don't need to use these types outside of the file
+// this is just a personal preference of the developer
+
 typedef unsigned char      moui_u8;
 typedef unsigned int       moui_u32;
 typedef unsigned long long moui_u64;
@@ -87,13 +90,14 @@ typedef moui_u8_array_type moui_u8_array;
 
 typedef moui_u8_array moui_string;
 
+// struct literal macro to help with compatibility between c and c++
 #ifdef __cplusplus
-#define moui_struct_literal(name)
+#define moui_sl(name)
 #else
-#define moui_struct_literal(name) (name)
+#define moui_sl(name) (name)
 #endif
 
-#define moui_s(static_string) moui_struct_literal(moui_string) { (moui_u8 *) static_string, (moui_usize) moui_carray_count(static_string) - 1 }
+#define moui_s(static_string) moui_sl(moui_string) { (moui_u8 *) static_string, (moui_usize) moui_carray_count(static_string) - 1 }
 #define moui_fs(text) (int) (text).count, (char *) (text).base
 
 const moui_string moui_string_empty = {0};
@@ -532,9 +536,8 @@ moui_frame_signature
     input->cursor = cursor;
     input->cursor_active_mask = cursor_active_mask;
 
-     moui_assert(!state->debug_is_in_frame);
-
 #if defined moui_debug
+    moui_assert(!state->debug_is_in_frame);
     state->debug_is_in_frame = moui_true;
 #endif
 
@@ -544,7 +547,7 @@ moui_frame_signature
     renderer->command_request_count = 0;
     renderer->canvas_size = canvas_size;
 
-    state->scissor_box.min = moui_struct_literal(moui_vec2) {0};
+    state->scissor_box.min = moui_sl(moui_vec2) {0};
     state->scissor_box.max = canvas_size;
 
     // inverted box
@@ -885,7 +888,7 @@ moui_default_init_signature
 
 moui_default_window_init_signature
 {
-    moui_assert(state->win32_gl_context); // call moui_init first
+    moui_assert(default_state->win32_gl_context); // call moui_init first
     moui_assert(window->device_context);
     moui_win32_gl_window_init(window->device_context);
 }
@@ -905,10 +908,10 @@ moui_default_render_begin_signature
 
 moui_default_render_end_signature
 {
-    moui_assert(state->win32_gl_context); // call moui_init first
+    moui_assert(default_state->win32_gl_context); // call moui_init first
     moui_assert(window->device_context);
 
-    moui_assert(state->win32_gl_current_device_context == window->device_context);
+    moui_assert(default_state->win32_gl_current_device_context == window->device_context);
     SwapBuffers(window->device_context);
 }
 
@@ -923,9 +926,8 @@ moui_default_render_prepare_execute_signature
 
 moui_execute_signature
 {
-    moui_assert(state->debug_is_in_frame);
-
 #if defined moui_debug
+    moui_assert(state->debug_is_in_frame);
     state->debug_is_in_frame = moui_false;
 #endif
 
@@ -1179,8 +1181,6 @@ moui_set_command_texture_signature
 
 moui_add_quad_signature
 {
-    moui_assert(state->renderer.command_request_count);
-
     state->renderer.current_command.quad_count++;
 
     moui_b8 ok = moui_false;
@@ -1197,7 +1197,7 @@ moui_add_quad_signature
 
 moui_to_quad_colors_signature
 {
-    return moui_struct_literal(moui_quad_colors) { color, color, color, color };
+    return moui_sl(moui_quad_colors) { color, color, color, color };
 }
 
 moui_add_texture_quad_signature
@@ -1207,20 +1207,20 @@ moui_add_texture_quad_signature
 
     moui_quad quad;
     quad.vertices[0].color    = colors.values[0];
-    quad.vertices[0].position = moui_struct_literal(moui_vec2) { box.min.x, box.min.y };
-    quad.vertices[0].uv       = moui_struct_literal(moui_vec2) { texture_box.min.x * texture_scale.x, texture_box.min.y * texture_scale.y };
+    quad.vertices[0].position = moui_sl(moui_vec2) { box.min.x, box.min.y };
+    quad.vertices[0].uv       = moui_sl(moui_vec2) { texture_box.min.x * texture_scale.x, texture_box.min.y * texture_scale.y };
 
     quad.vertices[1].color    = colors.values[1];
-    quad.vertices[1].position = moui_struct_literal(moui_vec2) { box.max.x, box.min.y };
-    quad.vertices[1].uv       = moui_struct_literal(moui_vec2) { texture_box.max.x * texture_scale.x, texture_box.min.y * texture_scale.y };
+    quad.vertices[1].position = moui_sl(moui_vec2) { box.max.x, box.min.y };
+    quad.vertices[1].uv       = moui_sl(moui_vec2) { texture_box.max.x * texture_scale.x, texture_box.min.y * texture_scale.y };
 
     quad.vertices[2].color    = colors.values[2];
-    quad.vertices[2].position = moui_struct_literal(moui_vec2) { box.max.x, box.max.y };
-    quad.vertices[2].uv       = moui_struct_literal(moui_vec2) { texture_box.max.x * texture_scale.x, texture_box.max.y * texture_scale.y };
+    quad.vertices[2].position = moui_sl(moui_vec2) { box.max.x, box.max.y };
+    quad.vertices[2].uv       = moui_sl(moui_vec2) { texture_box.max.x * texture_scale.x, texture_box.max.y * texture_scale.y };
 
     quad.vertices[3].color    = colors.values[3];
-    quad.vertices[3].position = moui_struct_literal(moui_vec2) { box.min.x, box.max.y };
-    quad.vertices[3].uv       = moui_struct_literal(moui_vec2) { texture_box.min.x * texture_scale.x, texture_box.max.y * texture_scale.y };
+    quad.vertices[3].position = moui_sl(moui_vec2) { box.min.x, box.max.y };
+    quad.vertices[3].uv       = moui_sl(moui_vec2) { texture_box.min.x * texture_scale.x, texture_box.max.y * texture_scale.y };
 
     moui_add_quad(state, quad);
 }
@@ -1235,12 +1235,12 @@ moui_texture_box_signature
 
 moui_box_signature
 {
-    moui_texture_box(state, layer, state->renderer.white_texture, colors, box, moui_struct_literal(moui_box2) {0});
+    moui_texture_box(state, layer, state->renderer.white_texture, colors, box, moui_sl(moui_box2) {0});
 }
 
 moui_get_atlas_item_signature
 {
-    moui_assert(parameter_count <= moui_carray(key_item.parameters));
+    moui_assert(parameter_count <= moui_carray_count(key_item.parameters));
     moui_u32 item_count = moui_u32_min(atlas->item_request_count, atlas->item_count);
     moui_u32 item_index = -1;
     for (moui_u32 i = 0; i < item_count; i++)
@@ -1513,7 +1513,7 @@ void moui_update_atlas(moui_state *state, moui_u8_array buffer)
 
 moui_text_cursor_at_line_signature
 {
-    return moui_struct_literal(moui_text_cursor) { position, position.x };
+    return moui_sl(moui_text_cursor) { position, position.x };
 }
 
 moui_text_cursor_at_top_signature
@@ -1631,7 +1631,7 @@ moui_printf_signature
     va_start(arguments, format);
     char text_buffer[1024]; // TODO: could be configurable
     moui_s32 count = vsnprintf(text_buffer, moui_carray_count(text_buffer), format, arguments);
-    moui_print(state, font, layer, color, cursor, moui_struct_literal(moui_string) { (moui_u8 *) text_buffer, (moui_usize) count });
+    moui_print(state, font, layer, color, cursor, moui_sl(moui_string) { (moui_u8 *) text_buffer, (moui_usize) count });
     va_end(arguments);
 }
 
@@ -1712,7 +1712,7 @@ moui_box2_cut_signature
 moui_load_font_signature
 {
     moui_assert(font->glyphs && font->glyph_count);
-    moui_assert((font->width > 0) && (font->height > 0));
+    moui_assert((font->texture.width > 0) && (font->texture.height > 0));
 
     font->height = height;
 
@@ -1734,7 +1734,7 @@ moui_load_font_signature
     }
 
     stbtt_bakedchar chars[256];
-    moui_assert(font->glyph_count <= moui_carray_count(font->glyph_count));
+    moui_assert(font->glyph_count <= moui_carray_count(chars));
 
     moui_u8_array result_texture = { texture_alpha_buffer.base, (moui_usize) (font->texture.width * font->texture.height) };
     moui_assert(result_texture.count <= texture_alpha_buffer.count);
@@ -1922,4 +1922,3 @@ moui_resize_buffers_signature
 #endif
 
 #endif
-

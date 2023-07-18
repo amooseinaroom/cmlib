@@ -9,7 +9,13 @@ extern "C" {
 #endif
 
 #if !defined mop_assert
+#if defined mop_debug
+// TODO: create proper message box
+#include <stdio.h>
+#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); *(mop_u32 *) mop_null = 0; }
+#else
 #define mop_assert(x)
+#endif
 #endif
 
 #if !defined mop_require
