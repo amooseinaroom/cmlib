@@ -9,8 +9,10 @@
 // - use stbe_truetype to load font data
 // include mo_platform.h and mo_memory_arena.h
 // - load font files from path
-// #define moui_custom_renderer
+// #define moui_custom_state
 // - implement your own rendering api
+// #define moui_debug
+// - enable debug information for api validation etc.
 
 // #define moui_implementation
 // - enable implementaion, only in one translation unit (.c or .cpp file) in your project
@@ -73,6 +75,16 @@ typedef moui_u8_array_type moui_u8_array;
 
 #endif
 
+#if !defined moui_f32_ceil
+#include <math.h>
+#define moui_f32_ceil ceilf
+#endif
+
+#if !defined moui_f32_square_root
+#include <math.h>
+#define moui_f32_square_root sqrtf
+#endif
+
 typedef moui_u8_array moui_string;
 
 #ifdef __cplusplus
@@ -81,7 +93,7 @@ typedef moui_u8_array moui_string;
 #define moui_struct_literal(name) (name)
 #endif
 
-#define moui_s(static_string) moui_struct_literal(string) { static_string, moui_carray_count(static_string) - 1 }
+#define moui_s(static_string) moui_struct_literal(moui_string) { (moui_u8 *) static_string, (moui_usize) moui_carray_count(static_string) - 1 }
 #define moui_fs(text) (int) (text).count, (char *) (text).base
 
 const moui_string moui_string_empty = {0};
@@ -192,42 +204,47 @@ typedef struct
     moui_box2 texture_box;
 } moui_glyph;
 
+typedef union
+{
+    struct {
+        moui_u8 is_hot:       1;
+        moui_u8 is_active:    1;
+        moui_u8 active_enter: 1;
+        moui_u8 active_exit:  1;
+    };
+
+    moui_u8 value;
+} moui_item_state;
+
 typedef struct
 {
-    moui_quad *quads;
-    moui_u32   quad_count;
-    moui_u32   quad_request_count;
+    moui_box2 texture_box;
+    moui_u32  type;
+    moui_f32  parameters[3];
+} moui_atlas_item;
 
-    moui_texture *textures;
-    moui_u32      texture_count;
-    moui_u32      texture_request_count; // we can't really say how many unique textures we have seen, when the buffer count is exceeded
+typedef struct
+{
+    moui_atlas_item *items;
+    moui_u32        item_request_count;
+    moui_u32        item_count;
 
-    moui_command *commands;
-    moui_u32      command_count;
-    moui_u32      command_request_count;
-    moui_command  current_command;
+    moui_s32 row_x;
+    moui_s32 row_y;
+    moui_s32 max_row_height;
 
-    moui_texture white_texture;
+    moui_u32 buffer_request_byte_count;
 
-    moui_s32 min_layer;
-    moui_s32 max_layer;
+    moui_texture texture;
+} moui_atlas;
 
-    moui_box2 scissor_box;
-    moui_box2 used_box;
-    moui_vec2 canvas_size;
+typedef enum
+{
+    moui_default_atlas_item_type_rounded_box,
+    moui_default_atlas_item_type_rounded_cutout_box,
 
-#if defined DEBUG
-    moui_b8 is_recording;
-#endif
-} moui_renderer_base;
-
-// actual implementation with additional implementation defined data
-// moui_renderer contains (moui_renderer_base base) as first field
-struct moui_renderer;
-typedef struct moui_renderer moui_renderer;
-
-struct moui_window;
-typedef struct moui_window moui_window;
+    moui_default_atlas_item_type_count
+} moui_default_atlas_item_type;
 
 typedef struct
 {
@@ -247,22 +264,50 @@ typedef struct
     moui_vec2 previous_cursor;
     moui_vec2 cursor;
 
-    moui_vec2 canvas_size;
-
     moui_vec2 drag_start_point;
+} moui_input;
+
+typedef struct
+{
+    moui_atlas   default_atlas;
+    moui_texture white_texture;
+
+    moui_quad *quads;
+    moui_u32   quad_count;
+    moui_u32   quad_request_count;
+
+    moui_texture *textures;
+    moui_u32      texture_count;
+    moui_u32      texture_request_count; // we can't really say how many unique textures we have seen, when the buffer count is exceeded
+
+    moui_command *commands;
+    moui_u32      command_count;
+    moui_u32      command_request_count;
+    moui_command  current_command;
+
+    moui_s32 min_layer;
+    moui_s32 max_layer;
+
+    moui_box2 used_box;
+    moui_vec2 canvas_size;
+} moui_renderer;
+
+typedef struct
+{
+    moui_box2     scissor_box;
+    moui_input    input;
+    moui_renderer renderer;
+
+#if defined moui_debug
+    moui_b8 debug_is_in_frame;
+#endif
 } moui_state;
 
-typedef union
-{
-    struct {
-        moui_u8 is_hot:       1;
-        moui_u8 is_active:    1;
-        moui_u8 active_enter: 1;
-        moui_u8 active_exit:  1;
-    };
+struct moui_default_state;
+typedef struct moui_default_state moui_default_state;
 
-    moui_u8 value;
-} moui_item_state;
+struct moui_default_window;
+typedef struct moui_default_window moui_default_window;
 
 // constants
 
@@ -273,8 +318,8 @@ const moui_rgba moui_rgba_black = { 0, 0, 0, 1 };
 
 #define moui_line_id(index) ((__LINE__ << 12) | index)
 
-#define moui_update_signature void moui_update(moui_state *state, moui_vec2 canvas_size, moui_vec2 cursor, moui_u32 cursor_active_mask)
-moui_update_signature;
+#define moui_frame_signature void moui_frame(moui_state *state, moui_vec2 canvas_size, moui_vec2 cursor, moui_u32 cursor_active_mask)
+moui_frame_signature;
 
 #define moui_item_is_active_signature moui_b8 moui_item_is_active(moui_state *state, moui_id id)
 moui_item_is_active_signature;
@@ -299,54 +344,53 @@ moui_box_is_hot_signature;
 
 // render
 
-#define moui_init_signature void moui_init(moui_renderer *renderer, moui_quad *quads, moui_u32 quad_count, moui_texture *textures, moui_u32 texture_count, moui_command *commands, moui_u32 command_count)
-moui_init_signature;
-
-// window is expected to be initialized with the platform native information
-#define moui_window_init_signature void moui_window_init(moui_renderer *renderer, moui_window *window)
-moui_window_init_signature;
-
-#define moui_set_buffers_signature void moui_set_buffers(moui_renderer *renderer, moui_quad *quads, moui_u32 quad_count, moui_texture *textures, moui_u32 texture_count, moui_command *commands, moui_u32 command_count)
+#define moui_set_buffers_signature void moui_set_buffers(moui_state *state, moui_quad *quads, moui_u32 quad_count, moui_texture *textures, moui_u32 texture_count, moui_command *commands, moui_u32 command_count)
 moui_set_buffers_signature;
 
-#define moui_record_signature void moui_record(moui_renderer *renderer, moui_vec2 canvas_size)
-moui_record_signature;
-
-#define moui_set_scissor_box_signature moui_box2 moui_set_scissor_box(moui_renderer *renderer, moui_box2 scissor_box)
+#define moui_set_scissor_box_signature moui_box2 moui_set_scissor_box(moui_state *state, moui_box2 scissor_box)
 moui_set_scissor_box_signature;
 
 #define moui_scissor_box_signature moui_b8 moui_scissor_box(moui_box2 scissor_box, moui_box2 *box, moui_box2 *texture_box)
 moui_scissor_box_signature;
 
-#define moui_scissor_signature moui_b8 moui_scissor(moui_renderer *renderer, moui_box2 *box, moui_box2 *texture_box)
+#define moui_scissor_signature moui_b8 moui_scissor(moui_state *state, moui_box2 *box, moui_box2 *texture_box)
 moui_scissor_signature;
 
-#define moui_used_box_begin_signature moui_box2 moui_used_box_begin(moui_renderer *renderer)
+#define moui_used_box_begin_signature moui_box2 moui_used_box_begin(moui_state *state)
 moui_used_box_begin_signature;
 
-#define moui_used_box_end_signature moui_box2 moui_used_box_end(moui_renderer *renderer, moui_box2 begin_box)
+#define moui_used_box_end_signature moui_box2 moui_used_box_end(moui_state *state, moui_box2 begin_box)
 moui_used_box_end_signature;
 
-#define moui_set_command_signature moui_b8 moui_set_command(moui_renderer *renderer, moui_s32 layer, moui_u32 texture_index)
+#define moui_set_command_signature moui_b8 moui_set_command(moui_state *state, moui_s32 layer, moui_u32 texture_index)
 moui_set_command_signature;
 
-#define moui_set_command_texture_signature moui_b8 moui_set_command_texture(moui_renderer *renderer, moui_s32 layer, moui_texture texture)
+#define moui_set_command_texture_signature moui_b8 moui_set_command_texture(moui_state *state, moui_s32 layer, moui_texture texture)
 moui_set_command_texture_signature;
 
-#define moui_add_quad_signature moui_b8 moui_add_quad(moui_renderer *renderer, moui_quad quad)
+#define moui_add_quad_signature moui_b8 moui_add_quad(moui_state *state, moui_quad quad)
 moui_add_quad_signature;
 
 #define moui_to_quad_colors_signature moui_quad_colors moui_to_quad_colors(moui_rgba color)
 moui_to_quad_colors_signature;
 
-#define moui_add_texture_quad_signature void moui_add_texture_quad(moui_renderer *renderer, moui_vec2 texture_scale, moui_quad_colors colors, moui_box2 box, moui_box2 texture_box)
+#define moui_add_texture_quad_signature void moui_add_texture_quad(moui_state *state, moui_vec2 texture_scale, moui_quad_colors colors, moui_box2 box, moui_box2 texture_box)
 moui_add_texture_quad_signature;
 
-#define moui_texture_box_signature void moui_texture_box(moui_renderer *renderer, moui_s32 layer, moui_texture texture, moui_quad_colors colors, moui_box2 box, moui_box2 texture_box)
+#define moui_texture_box_signature void moui_texture_box(moui_state *state, moui_s32 layer, moui_texture texture, moui_quad_colors colors, moui_box2 box, moui_box2 texture_box)
 moui_texture_box_signature;
 
-#define moui_box_signature void moui_box(moui_renderer *renderer, moui_s32 layer, moui_quad_colors colors, moui_box2 box)
+#define moui_box_signature void moui_box(moui_state *state, moui_s32 layer, moui_quad_colors colors, moui_box2 box)
 moui_box_signature;
+
+#define moui_get_atlas_item_signature moui_atlas_item * moui_get_atlas_item(moui_atlas *atlas, moui_atlas_item key_item, moui_u32 parameter_count)
+moui_get_atlas_item_signature;
+
+#define moui_rounded_box_signature void moui_rounded_box(moui_state *state, moui_s32 layer, moui_quad_colors colors, moui_box2 box, moui_f32 corner_radius)
+moui_rounded_box_signature;
+
+#define moui_rounded_cutout_box_signature void moui_rounded_cutout_box(moui_state *state, moui_s32 layer, moui_quad_colors colors, moui_s32 background_layer, moui_quad_colors background_colors, moui_box2 box, moui_f32 corner_radius)
+moui_rounded_cutout_box_signature;
 
 #define moui_text_cursor_at_line_signature moui_text_cursor moui_text_cursor_at_line(moui_vec2 position)
 moui_text_cursor_at_line_signature;
@@ -363,28 +407,42 @@ moui_text_advance_signature;
 #define moui_get_text_box_signature moui_box2 moui_get_text_box(moui_simple_text_iterator *iterator)
 moui_get_text_box_signature;
 
-#define moui_print_text_iterator_signature void moui_print_text_iterator(moui_renderer *renderer, moui_simple_text_iterator *iterator, moui_s32 layer, moui_rgba color)
+#define moui_print_text_iterator_signature void moui_print_text_iterator(moui_state *state, moui_simple_text_iterator *iterator, moui_s32 layer, moui_rgba color)
 moui_print_text_iterator_signature;
 
-#define moui_print_signature void moui_print(moui_renderer *renderer, moui_simple_font font, moui_s32 layer, moui_rgba color, moui_text_cursor *cursor, moui_string text)
+#define moui_print_signature void moui_print(moui_state *state, moui_simple_font font, moui_s32 layer, moui_rgba color, moui_text_cursor *cursor, moui_string text)
 moui_print_signature;
 
-#define moui_printf_signature void moui_printf(moui_renderer *renderer, moui_simple_font font, moui_s32 layer, moui_rgba color, moui_text_cursor *cursor, moui_cstring format, ...)
+#define moui_printf_signature void moui_printf(moui_state *state, moui_simple_font font, moui_s32 layer, moui_rgba color, moui_text_cursor *cursor, moui_cstring format, ...)
 moui_printf_signature;
 
-// optional call to bind current window
-#define moui_default_render_begin_signature void moui_default_render_begin(moui_renderer *renderer, moui_window *window)
-moui_default_render_begin_signature;
+#define moui_create_texture_signature moui_texture moui_create_texture(moui_s32 width, moui_s32 height, moui_b8 is_alpha_only, moui_u8 *data)
+moui_create_texture_signature;
 
-// optional call to setup rendering api
-#define moui_default_render_prepare_execute_signature void moui_default_render_prepare_execute(moui_renderer *renderer)
-moui_default_render_prepare_execute_signature;
+#define moui_update_texture_box_signature void moui_update_texture_box(moui_texture texture, moui_box2 texture_box, moui_b8 is_alpha_only, moui_u8 *data)
+moui_update_texture_box_signature;
 
-#define moui_execute_signature void moui_execute(moui_renderer *renderer)
+// actual rendering on the current render target
+#define moui_execute_signature void moui_execute(moui_state *state)
 moui_execute_signature;
 
-// optional call to swap window buffers
-#define moui_default_render_end_signature void moui_default_render_end(moui_renderer *renderer, moui_window *window, moui_b8 wait_for_vsync)
+// default functions
+// if you don't have your own rendering api set up, you can use these default functions
+
+#define moui_default_init_signature void moui_default_init(moui_default_state *default_state)
+moui_default_init_signature;
+
+// window is expected to be initialized with the platform native information
+#define moui_default_window_init_signature void moui_default_window_init(moui_default_state *default_state, moui_default_window *window)
+moui_default_window_init_signature;
+
+#define moui_default_render_begin_signature void moui_default_render_begin(moui_default_state *default_state, moui_default_window *window)
+moui_default_render_begin_signature;
+
+#define moui_default_render_prepare_execute_signature void moui_default_render_prepare_execute(moui_default_state *default_state)
+moui_default_render_prepare_execute_signature;
+
+#define moui_default_render_end_signature void moui_default_render_end(moui_default_state *default_state, moui_default_window *window, moui_b8 wait_for_vsync)
 moui_default_render_end_signature;
 
 // utility
@@ -443,7 +501,7 @@ moui_load_font_file_signature;
 
 #if defined(moma_h)
 
-#define moui_resize_buffers_signature void moui_resize_buffers(moui_renderer *renderer, moma_arena *arena)
+#define moui_resize_buffers_signature void moui_resize_buffers(moui_state *state, moma_arena *arena)
 moui_resize_buffers_signature;
 
 #endif
@@ -459,31 +517,59 @@ moui_resize_buffers_signature;
 
 // input
 
-moui_update_signature
+moui_frame_signature
 {
-    state->active_id   = state->next_active_id;
-    state->active_mask = state->next_active_mask;
-    state->hot_id = state->next_hot_id;
+    moui_input *input = &state->input;
+    input->active_id   = input->next_active_id;
+    input->active_mask = input->next_active_mask;
+    input->hot_id = input->next_hot_id;
 
-    state->next_active_id = moui_invalid_id; // prevent soft lock if active element gets removed
-    state->next_hot_id = moui_invalid_id;
-    state->next_hot_priority = 0xFFFFFFFF;
+    input->next_active_id = moui_invalid_id; // prevent soft lock if active element gets removed
+    input->next_hot_id = moui_invalid_id;
+    input->next_hot_priority = 0xFFFFFFFF;
 
-    state->previous_cursor = state->cursor;
-    state->cursor = cursor;
-    state->cursor_active_mask = cursor_active_mask;
+    input->previous_cursor = input->cursor;
+    input->cursor = cursor;
+    input->cursor_active_mask = cursor_active_mask;
 
-    state->canvas_size = canvas_size;
+     moui_assert(!state->debug_is_in_frame);
+
+#if defined moui_debug
+    state->debug_is_in_frame = moui_true;
+#endif
+
+    moui_renderer *renderer = &state->renderer;
+    renderer->quad_request_count = 0;
+    renderer->texture_request_count = 0;
+    renderer->command_request_count = 0;
+    renderer->canvas_size = canvas_size;
+
+    state->scissor_box.min = moui_struct_literal(moui_vec2) {0};
+    state->scissor_box.max = canvas_size;
+
+    // inverted box
+    renderer->used_box.max = state->scissor_box.min;
+    renderer->used_box.min = state->scissor_box.max;
+
+    renderer->current_command.layer = 0;
+    renderer->current_command.texture_index = -1;
+    renderer->current_command.quad_count = 0;
+
+    // MAYBE: pick min and max properly
+    renderer->min_layer = 0;
+    renderer->max_layer = 0;
+
+    renderer->default_atlas.item_request_count = moui_u32_min(renderer->default_atlas.item_request_count, renderer->default_atlas.item_count);
 }
 
 moui_item_is_active_signature
 {
-    return (state->active_id == id);
+    return (state->input.active_id == id);
 }
 
 moui_item_is_hot_signature
 {
-    return (state->hot_id == id);
+    return (state->input.hot_id == id);
 }
 
 moui_item_signature
@@ -492,36 +578,31 @@ moui_item_signature
 
     moui_item_state result = {0};
 
-    if (state->active_id == id)
+    if (is_hot && (state->input.next_hot_priority > hot_priority))
     {
-        result.is_active = (state->active_mask & active_mask) != 0;
-
-        if (!result.is_active)
-        {
-            state->next_active_id = moui_invalid_id;
-            result.active_exit = moui_true;
-        }
-        else // maybe active element gets removed and we want to prevent a soft lock
-        {
-            state->next_active_id = id;
-        }
+        state->input.next_hot_id       = id;
+        state->input.next_hot_priority = hot_priority;
     }
-    else if (!state->active_id && is_hot && (state->hot_id == id) && active_mask)
+
+    result.is_hot = is_hot && moui_item_is_hot(state, id);
+
+    if (moui_item_is_active(state, id))
     {
-        state->next_active_id   = id;
-        state->next_active_mask = active_mask;
+        result.is_active = (state->input.active_mask & active_mask) != 0;
+
+        if (result.is_active)
+            state->input.next_active_id = id;
+        else
+            result.active_exit = moui_true;
+    }
+    else if (!state->input.active_id && result.is_hot && active_mask)
+    {
+        state->input.next_active_id   = id;
+        state->input.next_active_mask = active_mask;
 
         result.is_active    = moui_true;
         result.active_enter = moui_true;
     }
-
-    if (is_hot && (state->next_hot_priority > hot_priority))
-    {
-        state->next_hot_id = id;
-        state->next_hot_priority = hot_priority;
-    }
-
-    result.is_hot = is_hot && (state->hot_id == id);
 
     return result;
 }
@@ -530,7 +611,7 @@ moui_button_signature
 {
     moui_item_state result = moui_item(state, id, is_hot, hot_priority, active_mask);
     if (result.active_exit && result.is_hot)
-        return state->active_mask & ~active_mask;
+        return state->input.active_mask & ~active_mask;
     else
         return 0;
 }
@@ -541,18 +622,18 @@ moui_drag_item_signature
 
     if (result.active_enter)
     {
-        state->drag_start_point.x = point->x - state->cursor.x;
-        state->drag_start_point.y = point->y - state->cursor.y;
+        state->input.drag_start_point.x = point->x - state->input.cursor.x;
+        state->input.drag_start_point.y = point->y - state->input.cursor.y;
     }
 
     if (result.is_active || result.active_exit)
     {
-        point->x = state->drag_start_point.x + state->cursor.x;
-        point->y = state->drag_start_point.y + state->cursor.y;
+        point->x = state->input.drag_start_point.x + state->input.cursor.x;
+        point->y = state->input.drag_start_point.y + state->input.cursor.y;
     }
 
     if (result.active_exit)
-        return state->active_mask & ~active_mask;
+        return state->input.active_mask & ~active_mask;
     else
         return 0;
 }
@@ -603,8 +684,8 @@ moui_box_line_is_hot_signature
 
 moui_box_is_hot_signature
 {
-    // TODO: use render scissor_box here to cut the box
-    return moui_box_line_is_hot(box, state->previous_cursor, state->cursor);
+    box = moui_box2_cut(state->scissor_box, box);
+    return moui_box_line_is_hot(box, state->input.previous_cursor, state->input.cursor);
 }
 
 // render
@@ -619,7 +700,7 @@ moui_box_is_hot_signature
 #pragma comment(lib, "user32")
 #pragma comment(lib, "opengl32")
 
-struct moui_window
+struct moui_default_window
 {
     HDC device_context;
 };
@@ -632,9 +713,9 @@ struct moui_window
 
 #include <gl/gl.h>
 
-struct moui_renderer
+struct moui_default_state
 {
-    moui_renderer_base base;
+    moui_state base;
 
     HWND  win32_gl_init_window;
     HDC   win32_gl_init_device_context;
@@ -642,7 +723,7 @@ struct moui_renderer
     HDC   win32_gl_current_device_context;
 };
 
-#define moui_gl_ckeck(x) x; moui_gl_error(# x, __FUNCTION__, __LINE__)
+#define moui_gl_check(x) x; moui_gl_error(# x, __FUNCTION__, __LINE__)
 
 void moui_gl_error(moui_cstring command, moui_cstring function, moui_u32 line)
 {
@@ -680,6 +761,58 @@ void moui_gl_error(moui_cstring command, moui_cstring function, moui_u32 line)
     }
 }
 
+moui_create_texture_signature
+{
+    moui_texture texture;
+    texture.width  = width;
+    texture.height = height;
+
+    moui_u32 texture_handle;
+    moui_gl_check(glGenTextures(1, &texture_handle));
+    moui_assert(texture_handle);
+
+    moui_gl_check(glBindTexture(GL_TEXTURE_2D, texture_handle));
+    if (is_alpha_only)
+    {
+        moui_gl_check(glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, texture.width, texture.height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, data));
+    }
+    else
+    {
+        moui_gl_check(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.width, texture.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data));
+    }
+
+    //GLint swizzle_mask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
+    //glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
+
+    moui_gl_check(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+    moui_gl_check(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+
+    moui_gl_check(glBindTexture(GL_TEXTURE_2D, 0));
+
+    texture.handle = (moui_u8 *) (moui_usize) texture_handle;
+    return texture;
+}
+
+moui_update_texture_box_signature
+{
+    moui_u32 texture_handle = (moui_u32) (moui_usize) texture.handle;
+    moui_assert(texture_handle);
+
+    moui_gl_check(glBindTexture(GL_TEXTURE_2D, texture_handle));
+
+    if (is_alpha_only)
+    {
+        moui_gl_check(glTexSubImage2D(GL_TEXTURE_2D, 0, texture_box.min.x, texture_box.min.y, texture_box.max.x - texture_box.min.x, texture_box.max.y - texture_box.min.y, GL_ALPHA, GL_UNSIGNED_BYTE, data));
+    }
+    else
+    {
+        moui_gl_check(glTexSubImage2D(GL_TEXTURE_2D, 0, texture_box.min.x, texture_box.min.y, texture_box.max.x - texture_box.min.x, texture_box.max.y - texture_box.min.y, GL_RGBA, GL_UNSIGNED_BYTE, data));
+    }
+
+    moui_gl_check(glBindTexture(GL_TEXTURE_2D, texture_handle));
+}
+
+
 void moui_win32_gl_window_init(HDC device_context)
 {
     PIXELFORMATDESCRIPTOR format_descriptor = {
@@ -707,35 +840,32 @@ void moui_win32_gl_window_init(HDC device_context)
     moui_require(SetPixelFormat(device_context, format, &format_descriptor));
 }
 
-moui_init_signature
+moui_default_init_signature
 {
-    *renderer = moui_struct_literal(moui_renderer) {0};
-    moui_set_buffers(renderer, quads, quad_count, textures, texture_count, commands, command_count);
-
     WNDCLASS window_class = {0};
     window_class.lpfnWndProc   = DefWindowProc;
     window_class.hInstance     = (HINSTANCE) GetModuleHandleA(moui_null);
     window_class.lpszClassName = "moui init window class";
     moui_require(RegisterClass(&window_class));
 
-    renderer->win32_gl_init_window = CreateWindowExA(0, window_class.lpszClassName, window_class.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, moui_null, moui_null, window_class.hInstance, moui_null);
-    moui_assert(renderer->win32_gl_init_window);
+    default_state->win32_gl_init_window = CreateWindowExA(0, window_class.lpszClassName, window_class.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, moui_null, moui_null, window_class.hInstance, moui_null);
+    moui_assert(default_state->win32_gl_init_window);
 
-    renderer->win32_gl_init_device_context = GetDC(renderer->win32_gl_init_window);
-    moui_require(renderer->win32_gl_init_device_context);
+    default_state->win32_gl_init_device_context = GetDC(default_state->win32_gl_init_window);
+    moui_require(default_state->win32_gl_init_device_context);
 
-    moui_win32_gl_window_init(renderer->win32_gl_init_device_context);
+    moui_win32_gl_window_init(default_state->win32_gl_init_device_context);
 
-    renderer->win32_gl_context = wglCreateContext(renderer->win32_gl_init_device_context);
-    moui_require(renderer->win32_gl_context);
+    default_state->win32_gl_context = wglCreateContext(default_state->win32_gl_init_device_context);
+    moui_require(default_state->win32_gl_context);
 
-    wglMakeCurrent(renderer->win32_gl_init_device_context, renderer->win32_gl_context);
+    wglMakeCurrent(default_state->win32_gl_init_device_context, default_state->win32_gl_context);
 
     {
         moui_u32 texture_handle;
         glGenTextures(1, &texture_handle);
 
-        u8 white = 255;
+        moui_u8 white = 255;
         glBindTexture(GL_TEXTURE_2D, texture_handle);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, 1, 1, 0, GL_ALPHA, GL_UNSIGNED_BYTE, &white);
 
@@ -744,82 +874,84 @@ moui_init_signature
 
         glBindTexture(GL_TEXTURE_2D, 0);
 
-        renderer->base.white_texture.width  = 1;
-        renderer->base.white_texture.height = 1;
-        renderer->base.white_texture.handle = (u8 *) (usize) texture_handle;
+        default_state->base.renderer.white_texture.width  = 1;
+        default_state->base.renderer.white_texture.height = 1;
+        default_state->base.renderer.white_texture.handle = (moui_u8 *) (moui_usize) texture_handle;
     }
 
     // enable v-sync
     //wglSwapIntervalEXT(1);
 }
 
-moui_window_init_signature
+moui_default_window_init_signature
 {
-    moui_assert(renderer->win32_gl_context); // call moui_init first
+    moui_assert(state->win32_gl_context); // call moui_init first
     moui_assert(window->device_context);
     moui_win32_gl_window_init(window->device_context);
 }
 
 moui_default_render_begin_signature
 {
-    moui_assert(renderer->win32_gl_context); // call moui_init first
+    moui_assert(default_state->win32_gl_context); // call moui_init first
     moui_assert(window->device_context);
-    // TODO: assert on moui_window_init being called
+    // TODO: assert on moui_default_window_init being called
 
-    if (renderer->win32_gl_current_device_context != window->device_context)
+    if (default_state->win32_gl_current_device_context != window->device_context)
     {
-        wglMakeCurrent(window->device_context, renderer->win32_gl_context);
-        renderer->win32_gl_current_device_context = window->device_context;
+        wglMakeCurrent(window->device_context, default_state->win32_gl_context);
+        default_state->win32_gl_current_device_context = window->device_context;
     }
 }
 
 moui_default_render_end_signature
 {
-    moui_assert(renderer->win32_gl_context); // call moui_init first
+    moui_assert(state->win32_gl_context); // call moui_init first
     moui_assert(window->device_context);
 
-    moui_assert(renderer->win32_gl_current_device_context == window->device_context);
+    moui_assert(state->win32_gl_current_device_context == window->device_context);
     SwapBuffers(window->device_context);
 }
 
 moui_default_render_prepare_execute_signature
 {
-    moui_gl_ckeck(glViewport(0, 0, renderer->base.canvas_size.x, renderer->base.canvas_size.y));
-    moui_gl_ckeck(glScissor(0, 0, renderer->base.canvas_size.x, renderer->base.canvas_size.y));
+    moui_gl_check(glViewport(0, 0, default_state->base.renderer.canvas_size.x, default_state->base.renderer.canvas_size.y));
+    moui_gl_check(glScissor(0,  0, default_state->base.renderer.canvas_size.x, default_state->base.renderer.canvas_size.y));
 
-    moui_gl_ckeck(glClearColor(0, 0, 0, 1));
-    moui_gl_ckeck(glClear(GL_COLOR_BUFFER_BIT));
+    moui_gl_check(glClearColor(0, 0, 0, 1));
+    moui_gl_check(glClear(GL_COLOR_BUFFER_BIT));
 }
 
 moui_execute_signature
 {
-    moui_assert(renderer->base.is_recording);
+    moui_assert(state->debug_is_in_frame);
 
-#if defined DEBUG
-    renderer->base.debug_is_recording = moui_true;
+#if defined moui_debug
+    state->debug_is_in_frame = moui_false;
 #endif
 
-    moui_gl_ckeck(glEnable(GL_BLEND));
+    moui_renderer *renderer = &state->renderer;
+
+    moui_gl_check(glEnable(GL_BLEND));
     // TODO: switch to premultiplied alpha
-    // moui_gl_ckeck(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
-    moui_gl_ckeck(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+    // moui_gl_check(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
+    moui_gl_check(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
 
     // force applying last command
-    moui_set_command(renderer, renderer->base.current_command.layer + 1, 0);
+    moui_set_command(state, renderer->current_command.layer + 1, 0);
 
-    moui_u32 command_count = moui_u32_min(renderer->base.command_request_count, renderer->base.command_count);
+    moui_u32 command_count = moui_u32_min(renderer->command_request_count, renderer->command_count);
 
-    moui_vec2 gl_viewport_scale = { 2.0f / renderer->base.canvas_size.x, 2.0f / renderer->base.canvas_size.y };
+    moui_vec2 gl_viewport_scale = { 2.0f / renderer->canvas_size.x, 2.0f / renderer->canvas_size.y };
 
     // TODO: sort by layer and texture
-    for (moui_s32 layer = renderer->base.min_layer; layer <= renderer->base.max_layer; layer++)
+    for (moui_s32 layer = renderer->min_layer; layer <= renderer->max_layer; layer++)
     {
         moui_u32 quad_offset = 0;
 
         for (moui_u32 command_index = 0; command_index < command_count; command_index++)
         {
-            moui_command command = renderer->base.commands[command_index];
-            if (quad_offset + command.quad_count > renderer->base.quad_count)
+            moui_command command = renderer->commands[command_index];
+            if (quad_offset + command.quad_count > renderer->quad_count)
                 break;
 
             if (command.layer != layer)
@@ -828,17 +960,17 @@ moui_execute_signature
                 continue;
             }
 
-            moui_u32 texture_handle = (moui_u32) (moui_usize) renderer->base.textures[command.texture_index].handle;
+            moui_u32 texture_handle = (moui_u32) (moui_usize) renderer->textures[command.texture_index].handle;
             if (texture_handle)
             {
-                moui_gl_ckeck(glEnable(GL_TEXTURE_2D));
+                moui_gl_check(glEnable(GL_TEXTURE_2D));
             }
             else
             {
-                moui_gl_ckeck(glDisable(GL_TEXTURE_2D));
+                moui_gl_check(glDisable(GL_TEXTURE_2D));
             }
 
-            moui_gl_ckeck(glBindTexture(GL_TEXTURE_2D, texture_handle));
+            moui_gl_check(glBindTexture(GL_TEXTURE_2D, texture_handle));
 
             glBegin(GL_TRIANGLES);
 
@@ -846,13 +978,13 @@ moui_execute_signature
             {
                 moui_vertex vertices[6];
 
-                vertices[0] = renderer->base.quads[quad_offset + quad_index].vertices[0];
-                vertices[1] = renderer->base.quads[quad_offset + quad_index].vertices[1];
-                vertices[2] = renderer->base.quads[quad_offset + quad_index].vertices[2];
+                vertices[0] = renderer->quads[quad_offset + quad_index].vertices[0];
+                vertices[1] = renderer->quads[quad_offset + quad_index].vertices[1];
+                vertices[2] = renderer->quads[quad_offset + quad_index].vertices[2];
 
                 vertices[3] = vertices[0];
                 vertices[4] = vertices[2];
-                vertices[5] = renderer->base.quads[quad_offset + quad_index].vertices[3];
+                vertices[5] = renderer->quads[quad_offset + quad_index].vertices[3];
 
                 for (moui_u32 vertex_index = 0; vertex_index < moui_carray_count(vertices); vertex_index++)
                 {
@@ -862,31 +994,31 @@ moui_execute_signature
                 }
             }
 
-            moui_gl_ckeck(glEnd());
+            moui_gl_check(glEnd());
 
             quad_offset += command.quad_count;
         }
     }
 }
 
-#else !defined moui_custom_renderer
+#else !defined moui_custom_state
 
-struct moui_renderer
+struct moui_default_state
 {
-    moui_renderer_base base;
+    moui_state base;
 };
 
-struct moui_window
+struct moui_default_window
 {
     moui_u32 ignored;
 };
 
-moui_init_signature
+moui_default_init_signature
 {
     moui_assert(0);
 }
 
-moui_window_init_signature
+moui_default_window_init_signature
 {
     moui_assert(0);
 }
@@ -913,50 +1045,22 @@ moui_execute_signature
 
 #endif
 
-moui_record_signature
-{
-    moui_assert(!renderer->base.is_recording);
-
-#if defined DEBUG
-    renderer->base.debug_is_recording = moui_true;
-#endif
-
-    renderer->base.quad_request_count = 0;
-    renderer->base.texture_request_count = 0;
-    renderer->base.command_request_count = 0;
-    renderer->base.canvas_size = canvas_size;
-    renderer->base.scissor_box.min = moui_struct_literal(moui_vec2) {0};
-    renderer->base.scissor_box.max = canvas_size;
-
-    // inverted box
-    renderer->base.used_box.max = renderer->base.scissor_box.min;
-    renderer->base.used_box.min = renderer->base.scissor_box.max;
-
-    renderer->base.current_command.layer = 0;
-    renderer->base.current_command.texture_index = 0; // TODO: generate white texture
-    renderer->base.current_command.quad_count = 0;
-
-    // MAYBE: pick min and max properly
-    renderer->base.min_layer = 0;
-    renderer->base.max_layer = 0;
-}
-
 moui_set_buffers_signature
 {
-    renderer->base.quads      = quads;
-    renderer->base.quad_count = quad_count;
+    state->renderer.quads      = quads;
+    state->renderer.quad_count = quad_count;
 
-    renderer->base.textures      = textures;
-    renderer->base.texture_count = texture_count;
+    state->renderer.textures      = textures;
+    state->renderer.texture_count = texture_count;
 
-    renderer->base.commands      = commands;
-    renderer->base.command_count = command_count;
+    state->renderer.commands      = commands;
+    state->renderer.command_count = command_count;
 }
 
 moui_set_scissor_box_signature
 {
-    moui_box2 previous_scissor_box = renderer->base.scissor_box;
-    renderer->base.scissor_box = scissor_box;
+    moui_box2 previous_scissor_box = state->scissor_box;
+    state->scissor_box = scissor_box;
 
     return previous_scissor_box;
 }
@@ -990,28 +1094,28 @@ moui_scissor_box_signature
 
 moui_scissor_signature
 {
-    moui_b8 ok = moui_scissor_box(renderer->base.scissor_box, box, texture_box);
+    moui_b8 ok = moui_scissor_box(state->scissor_box, box, texture_box);
     if (ok)
-        renderer->base.used_box = moui_box2_merge(renderer->base.used_box, *box);
+        state->renderer.used_box = moui_box2_merge(state->renderer.used_box, *box);
 
     return ok;
 }
 
 moui_used_box_begin_signature
 {
-    moui_box2 begin_box = renderer->base.used_box;
-    renderer->base.used_box.min.x = renderer->base.canvas_size.x;
-    renderer->base.used_box.max.x = 0;
-    renderer->base.used_box.min.y = renderer->base.canvas_size.y;
-    renderer->base.used_box.max.y = 0;
+    moui_box2 begin_box = state->renderer.used_box;
+    state->renderer.used_box.min.x = state->renderer.canvas_size.x;
+    state->renderer.used_box.max.x = 0;
+    state->renderer.used_box.min.y = state->renderer.canvas_size.y;
+    state->renderer.used_box.max.y = 0;
 
     return begin_box;
 }
 
 moui_used_box_end_signature
 {
-    moui_box2 end_box = renderer->base.used_box;
-    renderer->base.used_box = moui_box2_merge(renderer->base.used_box, begin_box);
+    moui_box2 end_box = state->renderer.used_box;
+    state->renderer.used_box = moui_box2_merge(state->renderer.used_box, begin_box);
 
     return end_box;
 }
@@ -1019,74 +1123,74 @@ moui_used_box_end_signature
 moui_set_command_signature
 {
     // append to current command
-    if ((renderer->base.current_command.layer == layer) && (renderer->base.current_command.texture_index == texture_index))
+    if ((state->renderer.current_command.layer == layer) && (state->renderer.current_command.texture_index == texture_index))
         return moui_true;
 
     moui_b8 ok = moui_true;
-    if (renderer->base.current_command.quad_count)
+    if (state->renderer.current_command.quad_count)
     {
-        if (renderer->base.command_request_count < renderer->base.command_count)
+        if (state->renderer.command_request_count < state->renderer.command_count)
         {
-            renderer->base.commands[renderer->base.command_request_count] = renderer->base.current_command;
-            renderer->base.min_layer = moui_s32_min(renderer->base.min_layer, renderer->base.current_command.layer);
-            renderer->base.max_layer = moui_s32_max(renderer->base.max_layer, renderer->base.current_command.layer);
+            state->renderer.commands[state->renderer.command_request_count] = state->renderer.current_command;
+            state->renderer.min_layer = moui_s32_min(state->renderer.min_layer, state->renderer.current_command.layer);
+            state->renderer.max_layer = moui_s32_max(state->renderer.max_layer, state->renderer.current_command.layer);
         }
         else
         {
             ok = moui_false;
         }
 
-        renderer->base.command_request_count++;
+        state->renderer.command_request_count++;
     }
 
-    renderer->base.current_command.layer         = layer;
-    renderer->base.current_command.texture_index = texture_index;
-    renderer->base.current_command.quad_count    = 0;
+    state->renderer.current_command.layer         = layer;
+    state->renderer.current_command.texture_index = texture_index;
+    state->renderer.current_command.quad_count    = 0;
 
     return ok;
 }
 
 moui_set_command_texture_signature
 {
-    moui_u32 texture_count = moui_u32_min(renderer->base.texture_request_count, renderer->base.texture_count);
+    moui_u32 texture_count = moui_u32_min(state->renderer.texture_request_count, state->renderer.texture_count);
     moui_u32 texture_index = 0;
     for (; texture_index < texture_count; texture_index++)
     {
-        if (renderer->base.textures[texture_index].handle == texture.handle)
+        if (state->renderer.textures[texture_index].handle == texture.handle)
         {
-            moui_assert(renderer->base.textures[texture_index].width  == texture.width);
-            moui_assert(renderer->base.textures[texture_index].height == texture.height);
+            moui_assert(state->renderer.textures[texture_index].width  == texture.width);
+            moui_assert(state->renderer.textures[texture_index].height == texture.height);
             break;
         }
     }
 
     if (texture_index == texture_count)
     {
-        if (renderer->base.texture_request_count < renderer->base.texture_count)
-            renderer->base.textures[texture_index] = texture;
+        if (state->renderer.texture_request_count < state->renderer.texture_count)
+            state->renderer.textures[texture_index] = texture;
         else
-            texture_index = renderer->base.texture_request_count;
+            texture_index = state->renderer.texture_request_count;
 
-        renderer->base.texture_request_count++;
+        state->renderer.texture_request_count++;
     }
 
-    return moui_set_command(renderer, layer, texture_index);
+    return moui_set_command(state, layer, texture_index);
 }
 
 moui_add_quad_signature
 {
-    moui_assert(renderer->base.command_request_count);
+    moui_assert(state->renderer.command_request_count);
 
-    renderer->base.current_command.quad_count++;
+    state->renderer.current_command.quad_count++;
 
     moui_b8 ok = moui_false;
-    if (renderer->base.quad_request_count < renderer->base.quad_count)
+    if (state->renderer.quad_request_count < state->renderer.quad_count)
     {
-        renderer->base.quads[renderer->base.quad_request_count] = quad;
+        state->renderer.quads[state->renderer.quad_request_count] = quad;
         ok = moui_true;
     }
 
-    renderer->base.quad_request_count++;
+    state->renderer.quad_request_count++;
 
     return ok;
 }
@@ -1098,7 +1202,7 @@ moui_to_quad_colors_signature
 
 moui_add_texture_quad_signature
 {
-    if (!moui_scissor(renderer, &box, &texture_box))
+    if (!moui_scissor(state, &box, &texture_box))
         return;
 
     moui_quad quad;
@@ -1118,20 +1222,293 @@ moui_add_texture_quad_signature
     quad.vertices[3].position = moui_struct_literal(moui_vec2) { box.min.x, box.max.y };
     quad.vertices[3].uv       = moui_struct_literal(moui_vec2) { texture_box.min.x * texture_scale.x, texture_box.max.y * texture_scale.y };
 
-    moui_add_quad(renderer, quad);
+    moui_add_quad(state, quad);
 }
 
 moui_texture_box_signature
 {
-    moui_set_command_texture(renderer, layer, texture);
+    moui_set_command_texture(state, layer, texture);
 
     moui_vec2 texture_scale = { 1.0f / texture.width, 1.0f / texture.height };
-    moui_add_texture_quad(renderer, texture_scale, colors, box, texture_box);
+    moui_add_texture_quad(state, texture_scale, colors, box, texture_box);
 }
 
 moui_box_signature
 {
-    moui_texture_box(renderer, layer, renderer->base.white_texture, colors, box, moui_struct_literal(moui_box2) {0});
+    moui_texture_box(state, layer, state->renderer.white_texture, colors, box, moui_struct_literal(moui_box2) {0});
+}
+
+moui_get_atlas_item_signature
+{
+    moui_assert(parameter_count <= moui_carray(key_item.parameters));
+    moui_u32 item_count = moui_u32_min(atlas->item_request_count, atlas->item_count);
+    moui_u32 item_index = -1;
+    for (moui_u32 i = 0; i < item_count; i++)
+    {
+        moui_atlas_item item = atlas->items[i];
+
+        if (item.type != key_item.type)
+            continue;
+
+        moui_b8 ok = moui_true;
+        for (moui_u32 parameter_index = 0; parameter_index < parameter_count; parameter_index++)
+        {
+            if (item.parameters[parameter_index] != key_item.parameters[parameter_index])
+            {
+                ok = moui_false;
+                break;
+            }
+        }
+
+        if (ok)
+        {
+            item_index = i;
+            break;
+        }
+    }
+
+    moui_atlas_item *item = moui_null;
+    if (item_index == -1)
+    {
+        if (atlas->item_request_count < atlas->item_count)
+        {
+            item = &atlas->items[atlas->item_request_count];
+            *item = key_item;
+            item->texture_box.max.x = 0; // not init
+        }
+
+        atlas->item_request_count++;
+    }
+    else
+    {
+        item = &atlas->items[item_index];
+        if (item->texture_box.max.x == 0) // not init
+            item = moui_null;
+    }
+
+    return item;
+}
+
+moui_rounded_box_signature
+{
+    moui_atlas *atlas = &state->renderer.default_atlas;
+    moui_atlas_item key_item;
+    key_item.type = moui_default_atlas_item_type_rounded_box;
+    key_item.parameters[0] = corner_radius;
+
+    moui_f32 corner_size = moui_f32_ceil(corner_radius);
+
+    // add some row allignment for gl texture
+    moui_s32 row_width = ((moui_s32) (corner_size + 1) + 3) & ~3;
+    atlas->buffer_request_byte_count = moui_u32_max(atlas->buffer_request_byte_count, (moui_u32) (row_width * (corner_size + 1)));
+
+    moui_atlas_item *found_item = moui_get_atlas_item(atlas, key_item, 1);
+    if (!found_item)
+        return;
+
+    moui_atlas_item item = *found_item;
+
+    moui_set_command_texture(state, layer, atlas->texture);
+
+    moui_vec2 texture_scale = { 1.0f / atlas->texture.width, 1.0f / atlas->texture.height };
+
+    moui_box2 tile_box;
+    moui_box2 tile_texture_box;
+
+    tile_box.min.y = box.min.y;
+    tile_box.max.y = box.min.y + corner_size;
+    tile_texture_box.min.y = item.texture_box.max.y - 1;
+    tile_texture_box.max.y = item.texture_box.min.y;
+
+    for (moui_u32 i = 0; i < 2; i++)
+    {
+        tile_box.min.x         = box.min.x;
+        tile_box.max.x         = tile_box.min.x + corner_size;
+        tile_texture_box.min.x = item.texture_box.max.x - 1;
+        tile_texture_box.max.x = item.texture_box.min.x;
+        moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
+
+        tile_box.min.x = tile_box.max.x;
+        tile_box.max.x = box.max.x - corner_size;
+        tile_texture_box.min.x = item.texture_box.min.x;
+        tile_texture_box.max.x = item.texture_box.min.x + 1;
+
+        if (tile_box.min.x < tile_box.max.x)
+            moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
+
+        tile_box.min.x = tile_box.max.x;
+        tile_box.max.x = box.max.x;
+        tile_texture_box.min.x = item.texture_box.min.x;
+        tile_texture_box.max.x = item.texture_box.max.x - 1;
+        moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
+
+        tile_box.min.y = box.max.y - corner_size;
+        tile_box.max.y = box.max.y;
+        tile_texture_box.min.y = item.texture_box.min.y;
+        tile_texture_box.max.y = item.texture_box.max.y - 1;
+    }
+
+    tile_box.min.x         = box.min.x;
+    tile_box.max.x         = box.max.x;
+    tile_box.min.y         = box.min.y + corner_size;
+    tile_box.max.y         = box.max.y - corner_size;
+    tile_texture_box.min.x = item.texture_box.min.x;
+    tile_texture_box.max.x = item.texture_box.min.x + 1;
+    tile_texture_box.min.y = item.texture_box.min.y;
+    tile_texture_box.max.y = item.texture_box.min.y + 1;
+    moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
+}
+
+moui_rounded_cutout_box_signature
+{
+    moui_atlas *atlas = &state->renderer.default_atlas;
+    moui_atlas_item key_item;
+    key_item.type = moui_default_atlas_item_type_rounded_cutout_box;
+    key_item.parameters[0] = corner_radius;
+
+    moui_f32 corner_size = moui_f32_ceil(corner_radius);
+
+    // add some row allignment for gl texture
+    moui_s32 row_width = ((moui_s32) (corner_size + 1) + 3) & ~3;
+    atlas->buffer_request_byte_count = moui_u32_max(atlas->buffer_request_byte_count, (moui_u32) (row_width * (corner_size + 1)));
+
+    moui_atlas_item *found_item = moui_get_atlas_item(atlas, key_item, 1);
+    if (!found_item)
+        return;
+
+    moui_atlas_item item = *found_item;
+
+    moui_set_command_texture(state, layer, atlas->texture);
+
+    moui_vec2 texture_scale = { 1.0f / atlas->texture.width, 1.0f / atlas->texture.height };
+
+    moui_box2 tile_box;
+    moui_box2 tile_texture_box;
+
+    // cutout background
+    tile_box = box;
+    tile_texture_box.min.x = item.texture_box.max.x - 1;
+    tile_texture_box.max.x = item.texture_box.max.x;
+    tile_texture_box.min.y = item.texture_box.max.y - 1;
+    tile_texture_box.max.y = item.texture_box.max.y;
+    moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
+
+    moui_set_command_texture(state, background_layer, atlas->texture);
+
+    tile_box.min.y = box.min.y;
+    tile_box.max.y = box.min.y + corner_size;
+    tile_texture_box.min.y = item.texture_box.max.y - 1;
+    tile_texture_box.max.y = item.texture_box.min.y;
+
+    for (moui_u32 i = 0; i < 2; i++)
+    {
+        tile_box.min.x         = box.min.x;
+        tile_box.max.x         = tile_box.min.x + corner_size;
+        tile_texture_box.min.x = item.texture_box.max.x - 1;
+        tile_texture_box.max.x = item.texture_box.min.x;
+        moui_add_texture_quad(state, texture_scale, background_colors, tile_box, tile_texture_box);
+
+        tile_box.min.x = tile_box.max.x;
+        tile_box.max.x = box.max.x - corner_size;
+        tile_texture_box.min.x = item.texture_box.min.x;
+        tile_texture_box.max.x = item.texture_box.min.x + 1;
+
+        tile_box.min.x = tile_box.max.x;
+        tile_box.max.x = box.max.x;
+        tile_texture_box.min.x = item.texture_box.min.x;
+        tile_texture_box.max.x = item.texture_box.max.x - 1;
+        moui_add_texture_quad(state, texture_scale, background_colors, tile_box, tile_texture_box);
+
+        tile_box.min.y = box.max.y - corner_size;
+        tile_box.max.y = box.max.y;
+        tile_texture_box.min.y = item.texture_box.min.y;
+        tile_texture_box.max.y = item.texture_box.max.y - 1;
+    }
+}
+
+void moui_update_atlas(moui_state *state, moui_u8_array buffer)
+{
+    moui_atlas *atlas = &state->renderer.default_atlas;
+    moui_assert(atlas->buffer_request_byte_count <= buffer.count);
+
+    if (!atlas->texture.handle)
+    {
+        atlas->texture.width  = 1024;
+        atlas->texture.height = 1024;
+
+        atlas->texture = moui_create_texture(1024, 1024, moui_true, moui_null);
+
+        atlas->row_x = 0;
+        atlas->row_y = 0;
+        atlas->max_row_height = 0;
+    }
+
+    moui_u32 item_count = moui_u32_min(atlas->item_request_count, atlas->item_count);
+    for (moui_u32 i = 0; i < item_count; i++)
+    {
+        moui_atlas_item *item = &atlas->items[i];
+        if (item->texture_box.max.x != 0) // is init
+            continue;
+
+        switch (item->type)
+        {
+        case moui_default_atlas_item_type_rounded_box:
+        case moui_default_atlas_item_type_rounded_cutout_box:
+        {
+            moui_f32 is_inverted = 0.0f;
+            if (item->type == moui_default_atlas_item_type_rounded_cutout_box)
+                is_inverted = 1.0f;
+
+            moui_f32 corner_radius = item->parameters[0];
+            moui_s32 size = (moui_s32) moui_f32_ceil(corner_radius) + 1;
+
+            // add alignment for gl texture
+            moui_s32 row_width = (size + 3) & ~3;
+            for (moui_s32 y = 0; y < size; y++)
+            {
+               for (moui_s32 x = 0; x < size; x++)
+               {
+                    moui_f32 value = moui_f32_max(0, moui_f32_min(1, corner_radius - moui_f32_square_root(x * x + y * y)));
+                    value = value * (1.0f - is_inverted) +  (1.0f - value) * is_inverted;
+                    buffer.base[y * row_width + x] = (moui_u8) (255 * value);
+
+                #if defined moui_debug
+                    // moui_string gray_scale = moui_s("$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. ");
+                    // printf("%c", gray_scale.base[gray_scale.count * (255 - buffer.base[y * row_width + x]) / 255]);
+                #endif
+                }
+
+            #if defined moui_debug
+                // printf("\n");
+            #endif
+            }
+
+            if (atlas->row_x + size > atlas->texture.width)
+            {
+                atlas->row_x = 0;
+
+                atlas->row_y += atlas->max_row_height;
+                moui_assert(atlas->row_y < atlas->texture.height);
+                atlas->max_row_height = 0;
+            }
+
+            atlas->max_row_height = moui_s32_max(atlas->max_row_height, size);
+
+            item->texture_box.min.x = atlas->row_x;
+            item->texture_box.min.y = atlas->row_y;
+            item->texture_box.max.x = item->texture_box.min.x + size;
+            item->texture_box.max.y = item->texture_box.min.y + size;
+
+            moui_box2 texture_box = { (moui_f32) atlas->row_x, (moui_f32) atlas->row_y, (moui_f32) atlas->row_x + size, (moui_f32) atlas->row_y + size };
+            moui_update_texture_box(atlas->texture, texture_box, moui_true, buffer.base);
+
+            atlas->row_x += size;
+        } break;
+
+        default:
+            moui_assert(0);
+        }
+    }
 }
 
 moui_text_cursor_at_line_signature
@@ -1228,14 +1605,14 @@ moui_print_signature
 {
     moui_simple_text_iterator iterator = { font, *cursor, text };
 
-    moui_print_text_iterator(renderer, &iterator, layer, color);
+    moui_print_text_iterator(state, &iterator, layer, color);
 
     *cursor = iterator.cursor;
 }
 
 moui_print_text_iterator_signature
 {
-    moui_set_command_texture(renderer, layer, iterator->font.texture);
+    moui_set_command_texture(state, layer, iterator->font.texture);
 
     moui_vec2 texture_scale = { 1.0f / iterator->font.texture.width, 1.0f / iterator->font.texture.height };
     moui_quad_colors colors = moui_to_quad_colors(color);
@@ -1244,7 +1621,7 @@ moui_print_text_iterator_signature
     while (moui_text_advance(&glyph, iterator))
     {
         if (glyph.index != -1)
-            moui_add_texture_quad(renderer, texture_scale, colors, glyph.box, glyph.texture_box);
+            moui_add_texture_quad(state, texture_scale, colors, glyph.box, glyph.texture_box);
     }
 }
 
@@ -1254,7 +1631,7 @@ moui_printf_signature
     va_start(arguments, format);
     char text_buffer[1024]; // TODO: could be configurable
     moui_s32 count = vsnprintf(text_buffer, moui_carray_count(text_buffer), format, arguments);
-    moui_print(renderer, font, layer, color, cursor, moui_struct_literal(moui_string) { (moui_u8 *) text_buffer, (moui_usize) count });
+    moui_print(state, font, layer, color, cursor, moui_struct_literal(moui_string) { (moui_u8 *) text_buffer, (moui_usize) count });
     va_end(arguments);
 }
 
@@ -1414,7 +1791,6 @@ moui_gl_load_font_signature
     font->texture.handle = (u8 *) (usize) texture_handle;
 }
 
-
 #if defined(mop_h) && defined(moma_h)
 
 moui_load_font_file_signature
@@ -1484,21 +1860,7 @@ moui_load_font_file_signature
         glyph->x_advance = chars[i].xadvance;
     }
 
-    u32 texture_handle;
-    glGenTextures(1, &texture_handle);
-
-    glBindTexture(GL_TEXTURE_2D, texture_handle);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, font.texture.width, font.texture.height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, texture_buffer);
-
-    //GLint swizzle_mask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
-    //glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    font.texture.handle = (u8 *) (usize) texture_handle;
+    font.texture = moui_create_texture(font.texture.width, font.texture.height, moui_true, texture_buffer);
 
     moma_reset(arena, read_file_buffer.base);
 
@@ -1516,19 +1878,45 @@ moui_load_font_file_signature
 
 moui_resize_buffers_signature
 {
-    moma_free(arena, renderer->base.quads);
-    renderer->base.quad_count = moui_u32_max(renderer->base.quad_count, renderer->base.quad_request_count);
-    renderer->base.quads = moma_allocate_array(arena, moui_quad, renderer->base.quad_count);
+    moma_free(arena, state->renderer.quads);
+    state->renderer.quad_count = moui_u32_max(state->renderer.quad_count, state->renderer.quad_request_count);
+    state->renderer.quads = moma_allocate_array(arena, moui_quad, state->renderer.quad_count);
 
     // we do a doubling stratagy, since we don't know how many different textures we missed
-    if (renderer->base.texture_request_count > renderer->base.texture_count)
-        renderer->base.texture_count = moui_u32_max(4, 2 * renderer->base.texture_count);
-    renderer->base.textures = moma_allocate_array(arena, moui_texture, renderer->base.texture_count);
+    if (state->renderer.texture_request_count > state->renderer.texture_count)
+        state->renderer.texture_count = moui_u32_max(4, 2 * state->renderer.texture_count);
+    state->renderer.textures = moma_allocate_array(arena, moui_texture, state->renderer.texture_count);
 
-    renderer->base.command_count = moui_u32_max(renderer->base.command_count, renderer->base.command_request_count);
-    renderer->base.commands = moma_allocate_array(arena, moui_command, renderer->base.command_count);
+    state->renderer.command_count = moui_u32_max(state->renderer.command_count, state->renderer.command_request_count);
+    state->renderer.commands = moma_allocate_array(arena, moui_command, state->renderer.command_count);
 
-    moui_set_buffers(renderer, renderer->base.quads, renderer->base.quad_count, renderer->base.textures, renderer->base.texture_count, renderer->base.commands, renderer->base.command_count);
+    moui_set_buffers(state, state->renderer.quads, state->renderer.quad_count, state->renderer.textures, state->renderer.texture_count, state->renderer.commands, state->renderer.command_count);
+
+    {
+        moui_usize previous_item_count = state->renderer.default_atlas.item_count;
+
+        if (state->renderer.default_atlas.item_count < state->renderer.default_atlas.item_request_count)
+        {
+            state->renderer.default_atlas.item_request_count = moui_u32_min(state->renderer.default_atlas.item_request_count, state->renderer.default_atlas.item_count);
+            state->renderer.default_atlas.item_count = moui_u32_max(4, state->renderer.default_atlas.item_count * 4);
+        }
+
+        // WARNING: if we change the memory contents, we need to buffer items before the reallocations
+        // so far we only recomputed pointers, so the old items pointer should still point to valid data
+        moui_atlas_item *items = state->renderer.default_atlas.items;
+        state->renderer.default_atlas.items = moma_allocate_array(arena, moui_atlas_item, state->renderer.default_atlas.item_count);
+        memmove(state->renderer.default_atlas.items, items, sizeof(moui_atlas_item) * previous_item_count);
+
+        {
+            moui_u8_array buffer;
+            buffer.count = state->renderer.default_atlas.buffer_request_byte_count;
+            buffer.base = moma_allocate_bytes(arena, buffer.count, 1);
+
+            moui_update_atlas(state, buffer);
+
+            moma_free(arena, buffer.base);
+        }
+    }
 }
 
 #endif
