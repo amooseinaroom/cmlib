@@ -62,6 +62,8 @@ typedef mos_u8_array mos_string;
 #define mos_t(base, count)   mos_struct_literal(mos_string) { (mos_u8 *) base, (mos_usize) count }
 #define mos_fs(text) (int) (text).count, (char *) (text).base
 
+const mos_string mos_string_empty = {0};
+
 typedef struct
 {
     mos_u8 *base;
@@ -84,11 +86,23 @@ mos_set_contains_signature;
 #define mos_skip_set_signature mos_usize mos_skip_set(mos_string *iterator, mos_string set)
 mos_skip_set_signature;
 
+#define mos_skip_until_set_or_end_signature mos_string mos_skip_until_set_or_end(mos_string *iterator, mos_string set)
+mos_skip_until_set_or_end_signature;
+
 #define mos_skip_white_space_signature mos_usize mos_skip_white_space(mos_string *iterator)
 mos_skip_white_space_signature;
 
+#define mos_skip_name_signature mos_string mos_skip_name(mos_string *iterator, mos_string blacklist)
+mos_skip_name_signature;
+
 #define mos_try_skip_signature mos_b8 mos_try_skip(mos_string *iterator, mos_string pattern)
 mos_try_skip_signature;
+
+#define mos_skip_signature void mos_skip(mos_string *iterator, mos_string pattern)
+mos_skip_signature;
+
+#define mos_skip_until_pattern_or_end_signature mos_string mos_skip_until_pattern_or_end(mos_string *iterator, mos_string pattern)
+mos_skip_until_pattern_or_end_signature;
 
 #define mos_parse_u64_ex_signature mos_b8 mos_parse_u64_ex(mos_u64 *result, mos_string *iterator, mos_u8 base)
 mos_parse_u64_ex_signature;
@@ -184,9 +198,40 @@ mos_skip_set_signature
     return count;
 }
 
+mos_skip_until_set_or_end_signature
+{
+    mos_usize count = 0;
+    while (count < iterator->count)
+    {
+        mos_string test = mos_struct_literal(mos_string) { iterator->base + count, iterator->count - count };
+        if (mos_skip_set(&test, set))
+            break;
+
+        count++;
+    }
+
+    mos_string result = mos_struct_literal(mos_string) { iterator->base, count };
+    mos_advance(iterator, count);
+
+    return result;
+}
+
 mos_skip_white_space_signature
 {
     return mos_skip_set(iterator, mos_s(" \t\n\r"));
+}
+
+mos_skip_name_signature
+{
+    if (!iterator->count)
+        return mos_string_empty;
+
+    mos_u8 digit = iterator->base[0];
+    if ('0' <= digit && digit <= '9')
+        return mos_string_empty;
+    
+    mos_string name = mos_skip_until_set_or_end(iterator, blacklist);
+    return name;
 }
 
 mos_try_skip_signature
@@ -203,6 +248,30 @@ mos_try_skip_signature
     mos_advance(iterator, pattern.count);
 
     return mos_true;
+}
+
+mos_skip_signature
+{
+    mos_b8 ok = mos_try_skip(iterator, pattern);
+    mos_assert(ok);    
+}
+
+mos_skip_until_pattern_or_end_signature
+{
+    mos_usize count = 0;
+    while (count < iterator->count)
+    {
+        mos_string test = mos_struct_literal(mos_string) { iterator->base + count, iterator->count - count };
+        if (mos_try_skip(&test, pattern))
+            break;
+
+        count++;
+    }
+
+    mos_string result = mos_struct_literal(mos_string) { iterator->base, count };
+    mos_advance(iterator, count);
+
+    return result;
 }
 
 mos_parse_u64_signature

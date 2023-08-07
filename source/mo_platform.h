@@ -12,7 +12,7 @@ extern "C" {
 #if defined mop_debug
 // TODO: create proper message box
 #include <stdio.h>
-#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); *(mop_u32 *) mop_null = 0; }
+#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); __debugbreak(); }
 #else
 #define mop_assert(x)
 #endif
@@ -70,7 +70,9 @@ typedef mop_u8_array mop_string;
 #define mop_struct_literal(name) (name)
 #endif
 
-#define mop_s(static_string) mop_struct_literal(string) { static_string, mop_carray_count(static_string) - 1 }
+#define mop_s(static_string) mop_struct_literal(string) { (mos_u8 *) static_string, mop_carray_count(static_string) - 1 }
+// sometimes needed to initialize global values
+#define mop_sc(const_static_string) { (mos_u8 *) static_string, mop_carray_count(static_string) - 1 }
 #define mop_fs(text) (int) (text).count, (char *) (text).base
 
 const mop_string mop_string_empty = {0};

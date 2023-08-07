@@ -68,6 +68,8 @@ typedef u8_array string;
 
 array_type(string_array, string);
 
+const string string_empty = {0};
+
 #define copy_items(to, from, count) copy((u8 *) (to), (u8 *) (from), sizeof(*(to)) * count)
 
 #define copy_signature void copy(u8 *to, u8 *from, usize byte_count)
@@ -83,6 +85,8 @@ copy_signature;
 
 // string out of c string literal
 #define s(static_string) sl(string) { (u8 *) static_string, carray_count(static_string) - 1 }
+// sometimes needed to initialize global values
+#define sc(static_string) { (u8 *) static_string, carray_count(static_string) - 1 }
 
 // format string
 // example: printf("%.*s", fs(my_string));
