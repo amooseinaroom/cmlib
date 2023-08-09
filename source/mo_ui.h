@@ -568,6 +568,7 @@ moui_frame_signature
     input->hot_id = input->next_hot_id;
 
     input->next_active_id = moui_invalid_id; // prevent soft lock if active element gets removed
+    input->next_active_id = moui_invalid_id; // prevent soft lock if active element gets removed
     input->next_hot_id = moui_invalid_id;
     input->next_hot_priority = 0xFFFFFFFF;
 
@@ -1765,7 +1766,7 @@ moui_add_texture_quad_signature
     quad.vertices[2].uv       = moui_sl(moui_vec2) { texture_box.max.x * texture_scale.x, texture_box.max.y * texture_scale.y };
 
     quad.vertices[3].color    = colors.values[3];
-    quad.vertices[3].position = moui_sl(moui_vec2) { box.min.x, box.max.y };
+    quad.vertices[3].position = moui_sl(moui_vec2) { box.min.x, box.max.y};
     quad.vertices[3].uv       = moui_sl(moui_vec2) { texture_box.min.x * texture_scale.x, texture_box.max.y * texture_scale.y };
 
     moui_add_quad(state, quad);
@@ -1775,7 +1776,7 @@ moui_texture_box_signature
 {
     moui_set_command_texture(state, layer, texture);
 
-    moui_vec2 texture_scale = { 1.0f / texture.width, 1.0f / texture.height };
+    moui_vec2 texture_scale = { 1.0f /  texture.width, 1.0f / texture.height };    
     moui_add_texture_quad(state, texture_scale, colors, box, texture_box);
 }
 
@@ -1958,7 +1959,7 @@ moui_rounded_box_signature
     moui_f32 corner_size = moui_f32_ceil(corner_radius);
 
     // add some row allignment for gl texture
-    moui_s32 row_width = ((moui_s32) (corner_size + 1) + 3) & ~3;
+    moui_s32 row_width = ((moui_s32) (corner_size + 1) + 3) & ~3;   
     atlas->buffer_request_byte_count = moui_u32_max(atlas->buffer_request_byte_count, (moui_u32) (row_width * (corner_size + 1)));
 
     moui_atlas_item *found_item = moui_get_atlas_item(atlas, key_item, 1);
@@ -1973,17 +1974,21 @@ moui_rounded_box_signature
 
     moui_box2 tile_box;
     moui_box2 tile_texture_box;
+    
+    // exclude white border
+    item.texture_box.max.x -= 1;
+    item.texture_box.max.y -= 1;
 
     tile_box.min.y = box.min.y;
-    tile_box.max.y = box.min.y + corner_size;
-    tile_texture_box.min.y = item.texture_box.max.y - 1;
+    tile_box.max.y = tile_box.min.y + corner_size;
+    tile_texture_box.min.y = item.texture_box.max.y;
     tile_texture_box.max.y = item.texture_box.min.y;
 
     for (moui_u32 i = 0; i < 2; i++)
     {
         tile_box.min.x         = box.min.x;
         tile_box.max.x         = tile_box.min.x + corner_size;
-        tile_texture_box.min.x = item.texture_box.max.x - 1;
+        tile_texture_box.min.x = item.texture_box.max.x;
         tile_texture_box.max.x = item.texture_box.min.x;
         moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
 
@@ -1992,19 +1997,19 @@ moui_rounded_box_signature
         tile_texture_box.min.x = item.texture_box.min.x;
         tile_texture_box.max.x = item.texture_box.min.x + 1;
 
-        if (tile_box.min.x < tile_box.max.x)
+        if (box.max.x - box.min.x > corner_size * 2)
             moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
 
-        tile_box.min.x = tile_box.max.x;
         tile_box.max.x = box.max.x;
+        tile_box.min.x = tile_box.max.x - corner_size;        
         tile_texture_box.min.x = item.texture_box.min.x;
-        tile_texture_box.max.x = item.texture_box.max.x - 1;
+        tile_texture_box.max.x = item.texture_box.max.x;
         moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
 
         tile_box.min.y = box.max.y - corner_size;
         tile_box.max.y = box.max.y;
         tile_texture_box.min.y = item.texture_box.min.y;
-        tile_texture_box.max.y = item.texture_box.max.y - 1;
+        tile_texture_box.max.y = item.texture_box.max.y;
     }
 
     tile_box.min.x         = box.min.x;
@@ -2090,17 +2095,17 @@ moui_box2 moui_atlas_place_texture_box(moui_atlas *atlas, moui_s32 width, moui_s
     moui_s32 row_width = (width + 3) & ~3;
     moui_assert(row_width * height <= buffer.count);
 
-    if (atlas->row_x + width > atlas->texture.width)
+    if (atlas->row_x + width + 1 > atlas->texture.width)
     {
         atlas->row_x = 0;
-        moui_assert(atlas->row_x + width <= atlas->texture.width);
+        moui_assert(atlas->row_x + width + 1 <= atlas->texture.width);
 
         atlas->row_y += atlas->max_row_height;
         moui_assert(atlas->row_y < atlas->texture.height);
         atlas->max_row_height = 0;
     }
 
-    atlas->max_row_height = moui_s32_max(atlas->max_row_height, height);
+    atlas->max_row_height = moui_s32_max(atlas->max_row_height, height + 1);
 
     moui_box2 texture_box;
     texture_box.min.x = atlas->row_x;
@@ -2109,7 +2114,7 @@ moui_box2 moui_atlas_place_texture_box(moui_atlas *atlas, moui_s32 width, moui_s
     texture_box.max.y = texture_box.min.y + height;
     moui_update_texture_box(atlas->texture, texture_box, moui_true, buffer.base);
 
-    atlas->row_x += width;
+    atlas->row_x += width + 1;
 
     return texture_box;
 }
