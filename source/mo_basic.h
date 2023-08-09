@@ -20,6 +20,11 @@ extern "C" {
 #define moui_assert(x) assert(x)
 #define moma_assert(x) assert(x)
 
+#define mos_require(x)  require(x)
+#define mote_require(x) require(x)
+#define moui_require(x) require(x)
+#define moma_require(x) require(x)
+
 typedef unsigned char      u8;
 typedef unsigned short     u16;
 typedef unsigned int       u32;

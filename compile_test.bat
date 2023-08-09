@@ -13,14 +13,14 @@ cl /c /TC %source% %options%
 echo test C ui compilation
 cl /c /TC %cd%\..\source\mo_ui.h %options% /Dmoui_implementation /Dmoui_debug
 echo test C ui gl compilation
-cl /c /TC %cd%\..\source\mo_ui.h %options% /Dmoui_implementation /Dmoui_debug /Dmoui_gl1
+cl /c /TC %cd%\..\source\mo_ui.h %options% /Dmoui_implementation /Dmoui_debug /Dmoui_gl_implementation
 
 echo test C++ compilation
 cl /c /TP %source% %options%
 echo test C ui compilation
 cl /c /TP %cd%\..\source\mo_ui.h %options% /Dmoui_implementation /Dmoui_debug
 echo test C ui gl compilation
-cl /c /TP %cd%\..\source\mo_ui.h %options% /Dmoui_implementation /Dmoui_debug /Dmoui_gl1
+cl /c /TP %cd%\..\source\mo_ui.h %options% /Dmoui_implementation /Dmoui_debug /Dmoui_gl_implementation
 
 popd
 

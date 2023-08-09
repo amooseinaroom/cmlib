@@ -19,7 +19,8 @@ extern "C" {
 #endif
 
 #if !defined mop_require
-#define mop_require(x) (x)
+#include <stdio.h>
+#define mop_require(x) if (!(x)) { printf("%s,%s,%u: Requirement Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); int error = GetLastError(); if (error) printf("   GetLastError() = %i\n", error); __debugbreak(); }
 #endif
 
 #define mop_cases_complete(value) default: mop_assert(0)
@@ -306,7 +307,7 @@ void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
 {
     mop_assert(key < mop_carray_count(platform->keys));
 
-    mop_assert(platform->keys[key].is_active != is_active);
+    // mop_assert(platform->keys[key].is_active != is_active);
 
     if (platform->keys[key].half_transition_count == 63)
         platform->keys[key].half_transition_overflow = mop_true;
@@ -460,7 +461,8 @@ mop_read_file_signature
         else
             read_count = byte_count;
 
-        mop_require(ReadFile(handle, base, read_count, mop_null, mop_null));
+        mop_u32 ignored_out_read_byte_count; // win7 requires this
+        mop_require(ReadFile(handle, base, read_count, (DWORD *) &ignored_out_read_byte_count, mop_null));
         base       += read_count;
         byte_count -= read_count;
     }
@@ -487,7 +489,8 @@ mop_write_file_signature
         else
             write_count = (mop_u32) data.count;
 
-        mop_require(WriteFile(handle, data.base, write_count, mop_null, mop_null));
+        mop_u32 ignored_out_write_byte_count; // win7 requires this
+        mop_require(WriteFile(handle, data.base, write_count, (DWORD *) &ignored_out_write_byte_count, mop_null));
         data.base  += write_count;
         data.count -= write_count;
     }

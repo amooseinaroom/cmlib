@@ -3,8 +3,8 @@
 
 // options before including mo_ui.h:
 
-// #define moui_gl1
-// - use open gl 1 rendering
+// #define moui_gl_implementation
+// - use open gl rendering
 // include stb_turetype.h
 // - use stbe_truetype to load font data
 // include mo_platform.h and mo_memory_arena.h
@@ -279,6 +279,14 @@ typedef struct
 
 typedef struct
 {
+    moui_u32 array_object;
+    moui_u32 array_buffer_object;
+    moui_u32 used_count;
+    moui_u32 total_count;
+} moui_gl_buffer;
+
+typedef struct
+{
     moui_atlas   default_atlas;
     moui_texture white_texture;
     moui_texture line_texture;
@@ -286,6 +294,10 @@ typedef struct
     moui_quad *quads;
     moui_u32   quad_count;
     moui_u32   quad_request_count;
+
+    moui_vertex *vertices;
+    moui_u32    vertex_count;
+    moui_u32    vertex_request_count;
 
     moui_texture *textures;
     moui_u32      texture_count;
@@ -301,6 +313,17 @@ typedef struct
 
     moui_box2 used_box;
     moui_vec2 canvas_size;
+
+    union
+    {
+        struct
+        {
+            moui_u32       shader;
+            moui_s32       shader_color_map;
+            moui_gl_buffer vertex_buffer;
+            moui_b8        is_modern;
+        } gl;
+    };
 } moui_renderer;
 
 typedef struct
@@ -355,7 +378,7 @@ moui_box_is_hot_signature;
 
 // render
 
-#define moui_set_buffers_signature void moui_set_buffers(moui_state *state, moui_quad *quads, moui_u32 quad_count, moui_texture *textures, moui_u32 texture_count, moui_command *commands, moui_u32 command_count)
+#define moui_set_buffers_signature void moui_set_buffers(moui_state *state, moui_u32 quad_count, moui_quad *quads, moui_u32 vertex_count, moui_vertex *vertices, moui_u32 texture_count, moui_texture *textures, moui_u32 command_count, moui_command *commands)
 moui_set_buffers_signature;
 
 #define moui_set_scissor_box_signature moui_box2 moui_set_scissor_box(moui_state *state, moui_box2 scissor_box)
@@ -381,6 +404,9 @@ moui_set_command_texture_signature;
 
 #define moui_add_quad_signature moui_b8 moui_add_quad(moui_state *state, moui_quad quad)
 moui_add_quad_signature;
+
+#define moui_premultiply_alpha_signature moui_rgba moui_premultiply_alpha(moui_rgba color)
+moui_premultiply_alpha_signature;
 
 #define moui_to_quad_colors_signature moui_quad_colors moui_to_quad_colors(moui_rgba color)
 moui_to_quad_colors_signature;
@@ -500,7 +526,7 @@ moui_vec2_resize_signature;
 #define moui_load_font_signature moui_u8_array moui_load_font(moui_simple_font *font, moui_u8_array texture_alpha_buffer, moui_u8_array font_data, s32 height, u32 first_character)
 moui_load_font_signature;
 
-#if defined moui_gl1
+#if defined moui_gl_implementation
 
 #define moui_gl_load_font_signature void moui_gl_load_font(moui_simple_font *font, moui_u8_array texture_alpha_buffer, moui_u8_array font_data, s32 height, u32 first_character)
 moui_gl_load_font_signature;
@@ -556,6 +582,7 @@ moui_frame_signature
 
     moui_renderer *renderer = &state->renderer;
     renderer->quad_request_count = 0;
+    renderer->vertex_request_count = 0;
     renderer->texture_request_count = 0;
     renderer->command_request_count = 0;
     renderer->canvas_size = canvas_size;
@@ -722,18 +749,42 @@ moui_box_is_hot_signature
 
 // render
 
-#if defined moui_gl1
+#if defined moui_gl_implementation
 
 #if defined(_WIN32) || defined(WIN32)
 
 #include <windows.h>
-
-#include <gl_bindings.h>
-#include <gl_win32_bindings.h>
+#include <GL/gl.h>
 
 #pragma comment(lib, "gdi32")
 #pragma comment(lib, "user32")
 #pragma comment(lib, "opengl32")
+
+#define moui_gl_load(function) moui_ ## function = (moui_ ## function ## _function) wglGetProcAddress(# function)
+
+#define WGL_DRAW_TO_WINDOW_ARB 0x2001
+#define WGL_SUPPORT_OPENGL_ARB 0x2010
+#define WGL_DOUBLE_BUFFER_ARB 0x2011
+#define WGL_PIXEL_TYPE_ARB 0x2013
+#define WGL_TYPE_RGBA_ARB 0x202B
+#define WGL_COLOR_BITS_ARB 0x2014
+#define WGL_DEPTH_BITS_ARB 0x2022
+#define WGL_STENCIL_BITS_ARB 0x2023
+#define WGL_CONTEXT_MAJOR_VERSION_ARB 0x2091
+#define WGL_CONTEXT_MINOR_VERSION_ARB 0x2092
+#define WGL_CONTEXT_PROFILE_MASK_ARB 0x9126
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB 0x00000001
+#define WGL_CONTEXT_FLAGS_ARB 0x2094
+#define WGL_CONTEXT_DEBUG_BIT_ARB 0x00000001
+
+typedef signed int  (*moui_wglChoosePixelFormatARB_function)(HDC hdc, signed int *piAttribIList, float *pfAttribFList, unsigned int nMaxFormats, signed int *piFormats, unsigned int *nNumFormats);
+moui_wglChoosePixelFormatARB_function moui_wglChoosePixelFormatARB;
+
+typedef HGLRC  (*moui_wglCreateContextAttribsARB_function)(HDC hDC, HGLRC hShareContext, signed int *attribList);
+moui_wglCreateContextAttribsARB_function moui_wglCreateContextAttribsARB;
+
+typedef signed int  (*moui_wglSwapIntervalEXT_function)(signed int interval);
+moui_wglSwapIntervalEXT_function moui_wglSwapIntervalEXT;
 
 struct moui_default_window
 {
@@ -742,7 +793,7 @@ struct moui_default_window
 
 #else
 
-#error moui_gl1 not implemented for current platform
+#error moui_gl_implementation not implemented for current platform
 
 #endif
 
@@ -753,8 +804,7 @@ struct moui_default_state
     HWND    win32_gl_init_window;
     HDC     win32_gl_init_device_context;
     HGLRC   win32_gl_context;
-    HDC     win32_gl_current_device_context;
-    moui_b8 win32_gl_is_modern;
+    HDC     win32_gl_current_device_context;    
 };
 
 #define moui_gl_check(x) x; moui_gl_error(# x, __FUNCTION__, __LINE__)
@@ -792,20 +842,92 @@ void moui_gl_error(moui_cstring command, moui_cstring function, moui_u32 line)
 
         if (!found)
             printf("gl error %s unknown error %i\n", command, error);
-    }
 }
+    }
 
-//#define moui_gl_load(function) function = (moui_ ## function ## _function) wglGetProcAddress(# function)
-#define moui_gl_load(function) function = (function ## _function) wglGetProcAddress(# function)
+#define moui_gl_required_load(function) moui_gl_load(function); moui_require(moui_ ## function)
 
-//#dfine moui_wglChoosePixelFormatARB_signature(name) BOOL name(HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
-//typedef moui_wglChoosePixelFormatARB_signature((*moui_wglChoosePixelFormatARB_function));
+#define GL_TEXTURE_SWIZZLE_RGBA 0x8E46
+#define GL_VERTEX_SHADER 0x8B31
+#define GL_FRAGMENT_SHADER 0x8B30
+#define GL_COMPILE_STATUS 0x8B81
+#define GL_LINK_STATUS 0x8B82
+#define GL_ARRAY_BUFFER 0x8892
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
+#define GL_DYNAMIC_DRAW 0x88E8
+#define GL_TEXTURE0 0x84C0
 
-//typedef BOOL (*moui_wglChoosePixelFormatARB_function)(HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
-//typedef HGLRC (*moui_wglCreateContextAttribsARB_function)(HDC hDC, HGLRC hShareContext, const int *attribList);
+typedef GLuint  (*moui_glCreateShader_function)(GLenum type);
+moui_glCreateShader_function moui_glCreateShader;
 
-//moui_wglChoosePixelFormatARB_function    wglChoosePixelFormatARB;
-//moui_wglCreateContextAttribsARB_function wglCreateContextAttribsARB;
+typedef GLuint  (*moui_glCreateProgram_function)();
+moui_glCreateProgram_function moui_glCreateProgram;
+
+typedef void (*moui_glShaderSource_function)(GLuint shader, GLsizei count, char **string, GLint *length);
+moui_glShaderSource_function moui_glShaderSource;
+
+typedef void (*moui_glCompileShader_function)(GLuint shader);
+moui_glCompileShader_function moui_glCompileShader;
+
+typedef void (*moui_glGetShaderiv_function)(GLuint shader, GLenum pname, GLint *params);
+moui_glGetShaderiv_function moui_glGetShaderiv;
+
+typedef void (*moui_glAttachShader_function)(GLuint program, GLuint shader);
+moui_glAttachShader_function moui_glAttachShader;
+
+typedef void (*moui_glBindAttribLocation_function)(GLuint program, GLuint index, char *name);
+moui_glBindAttribLocation_function moui_glBindAttribLocation;
+
+typedef void (*moui_glLinkProgram_function)(GLuint program);
+moui_glLinkProgram_function moui_glLinkProgram;
+
+typedef void (*moui_glGetProgramiv_function)(GLuint program, GLenum pname, GLint *params);
+moui_glGetProgramiv_function moui_glGetProgramiv;
+
+typedef GLint  (*moui_glGetUniformLocation_function)(GLuint program, char *name);
+moui_glGetUniformLocation_function moui_glGetUniformLocation;
+
+typedef void (*moui_glDeleteShader_function)(GLuint shader);
+moui_glDeleteShader_function moui_glDeleteShader;
+
+typedef void (*moui_glGenVertexArrays_function)(GLsizei n, GLuint *arrays);
+moui_glGenVertexArrays_function moui_glGenVertexArrays;
+
+typedef void (*moui_glBindVertexArray_function)(GLuint array);
+moui_glBindVertexArray_function moui_glBindVertexArray;
+
+typedef void (*moui_glEnableVertexAttribArray_function)(GLuint index);
+moui_glEnableVertexAttribArray_function moui_glEnableVertexAttribArray;
+
+typedef void (*moui_glVertexAttribPointer_function)(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, void * pointer);
+moui_glVertexAttribPointer_function moui_glVertexAttribPointer;
+
+typedef void (*moui_glDeleteVertexArrays_function)(GLsizei n, GLuint *arrays);
+moui_glDeleteVertexArrays_function moui_glDeleteVertexArrays;
+
+typedef void (*moui_glGenBuffers_function)(GLsizei n, GLuint *buffers);
+moui_glGenBuffers_function moui_glGenBuffers;
+
+typedef void (*moui_glDeleteBuffers_function)(GLsizei n, GLuint *buffers);
+moui_glDeleteBuffers_function moui_glDeleteBuffers;
+
+typedef void (*moui_glBindBuffer_function)(GLenum target, GLuint buffer);
+moui_glBindBuffer_function moui_glBindBuffer;
+
+typedef void (*moui_glBufferData_function)(GLenum target, moui_s64 size, void * data, GLenum usage);
+moui_glBufferData_function moui_glBufferData;
+
+typedef void (*moui_glBufferSubData_function)(GLenum target, moui_s64 offset, moui_s64 size, void * data);
+moui_glBufferSubData_function moui_glBufferSubData;
+
+typedef void (*moui_glUseProgram_function)(GLuint program);
+moui_glUseProgram_function moui_glUseProgram;
+
+typedef void (*moui_glUniform1i_function)(GLint location, GLint v0);
+moui_glUniform1i_function moui_glUniform1i;
+      
+typedef void (*moui_glActiveTexture_function)(GLenum texture);
+moui_glActiveTexture_function moui_glActiveTexture;
 
 moui_create_texture_signature
 {
@@ -820,15 +942,16 @@ moui_create_texture_signature
     moui_gl_check(glBindTexture(GL_TEXTURE_2D, texture_handle));
     if (is_alpha_only)
     {
-        moui_gl_check(glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, texture.width, texture.height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, data));
+        moui_gl_check(glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, texture.width, texture.height, 0, GL_RED, GL_UNSIGNED_BYTE, data));
+
+        // premultiplied alpha
+        GLint swizzle_mask[] = { GL_RED, GL_RED, GL_RED, GL_RED };
+        glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
     }
     else
     {
         moui_gl_check(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.width, texture.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data));
     }
-
-    //GLint swizzle_mask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
-    //glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
 
     if (is_bilinear)
     {
@@ -856,7 +979,7 @@ moui_update_texture_box_signature
 
     if (is_alpha_only)
     {
-        moui_gl_check(glTexSubImage2D(GL_TEXTURE_2D, 0, texture_box.min.x, texture_box.min.y, texture_box.max.x - texture_box.min.x, texture_box.max.y - texture_box.min.y, GL_ALPHA, GL_UNSIGNED_BYTE, data));
+        moui_gl_check(glTexSubImage2D(GL_TEXTURE_2D, 0, texture_box.min.x, texture_box.min.y, texture_box.max.x - texture_box.min.x, texture_box.max.y - texture_box.min.y, GL_RED, GL_UNSIGNED_BYTE, data));
     }
     else
     {
@@ -914,9 +1037,15 @@ void moui_win32_gl_window_init_modern(HDC device_context)
 
     moui_s32 pixel_format;
     moui_u32 pixel_format_count;
-    moui_require(wglChoosePixelFormatARB(device_context, pixel_format_attributes, moui_null, 1, &pixel_format, &pixel_format_count));
+    moui_require(moui_wglChoosePixelFormatARB(device_context, pixel_format_attributes, moui_null, 1, &pixel_format, &pixel_format_count));
     moui_require(SetPixelFormat(device_context, pixel_format, moui_null));
 }
+
+#define moui_gl_create_shader_program_signature moui_u32 moui_gl_create_shader_program(moui_string name, moui_u32 vertex_source_count, moui_string *vertex_sources, moui_u32 fragment_source_count, moui_string *fragment_sources)
+moui_gl_create_shader_program_signature;
+
+#define moui_gl_create_shader_object_signature moui_u32 moui_gl_create_shader_object(moui_string name, moui_b8 is_fragment_shader, moui_u32 source_count, moui_string *sources)
+moui_gl_create_shader_object_signature;
 
 moui_default_init_signature
 {
@@ -939,11 +1068,10 @@ moui_default_init_signature
 
     moui_require(wglMakeCurrent(default_state->win32_gl_init_device_context, default_state->win32_gl_context));
 
-#if 0
     moui_gl_load(wglChoosePixelFormatARB);
     moui_gl_load(wglCreateContextAttribsARB);
 
-    if (wglChoosePixelFormatARB && wglCreateContextAttribsARB)
+    if (moui_wglChoosePixelFormatARB && moui_wglCreateContextAttribsARB)
     {
         moui_require(wglMakeCurrent(moui_null, moui_null));
 
@@ -967,7 +1095,7 @@ moui_default_init_signature
         //if backwards_compatible
             //{ context_attributes[7] = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB; }
 
-        HGLRC win32_gl_context = wglCreateContextAttribsARB(win32_gl_init_device_context, moui_null, context_attributes);
+        HGLRC win32_gl_context = moui_wglCreateContextAttribsARB(win32_gl_init_device_context, moui_null, context_attributes);        
         if (win32_gl_context)
         {
             moui_require(wglDeleteContext(default_state->win32_gl_context));
@@ -977,17 +1105,80 @@ moui_default_init_signature
             default_state->win32_gl_init_window         = win32_gl_init_window;
             default_state->win32_gl_init_device_context = win32_gl_init_device_context;
             default_state->win32_gl_context             = win32_gl_context;
-            default_state->win32_gl_is_modern           = moui_true;
+            default_state->base.renderer.gl.is_modern   = moui_true;
+
+            moui_require(wglMakeCurrent(default_state->win32_gl_init_device_context, default_state->win32_gl_context));
+
+            moui_gl_required_load(glCreateShader);
+            moui_gl_required_load(glCreateProgram);
+            moui_gl_required_load(glShaderSource);
+            moui_gl_required_load(glCompileShader);
+            moui_gl_required_load(glGetShaderiv);
+            moui_gl_required_load(glAttachShader);            
+            moui_gl_required_load(glBindAttribLocation);            
+            moui_gl_required_load(glLinkProgram);
+            moui_gl_required_load(glGetProgramiv);            
+            moui_gl_required_load(glGetUniformLocation);
+            moui_gl_required_load(glDeleteShader);            
+            moui_gl_required_load(glGenVertexArrays);
+            moui_gl_required_load(glBindVertexArray);
+            moui_gl_required_load(glEnableVertexAttribArray);
+            moui_gl_required_load(glVertexAttribPointer);
+            moui_gl_required_load(glDeleteVertexArrays);
+            moui_gl_required_load(glGenBuffers);
+            moui_gl_required_load(glDeleteBuffers);
+            moui_gl_required_load(glBindBuffer);
+            moui_gl_required_load(glBufferData);
+            moui_gl_required_load(glBufferSubData);        
+            moui_gl_required_load(glUseProgram);
+            moui_gl_required_load(glUniform1i);
+            moui_gl_required_load(glActiveTexture);
+
+            moui_string vertex_shader = moui_s(
+                "#version 330\n"
+                "\n"
+                "in vec2 vertex_position;\n"
+                "in vec2 vertex_uv;\n"
+                "in vec4 vertex_color;\n"
+                "\n"
+                "out vec2 fragment_uv;\n"
+                "out vec4 fragment_color;\n"
+                "\n"
+                "void main()\n"
+                "{\n"
+                "    fragment_uv    = vertex_uv;\n"
+                "    fragment_color = vertex_color;\n"
+                "\n"
+                "    gl_Position = vec4(vertex_position, 0, 1);\n"
+                "}\n"
+                );
+
+            moui_string fragment_shader = moui_s(
+                "#version 330\n"
+                "\n"                
+                "in vec2 fragment_uv;\n"
+                "in vec4 fragment_color;\n"
+                "\n"
+                "out vec4 out_color;\n"
+                "\n"
+                "uniform sampler2D color_map;\n"
+                "\n"
+                "void main()\n"
+                "{\n"                
+                "    out_color = texture(color_map, fragment_uv) * fragment_color;\n"
+                "}\n"
+                );
+
+            default_state->base.renderer.gl.shader = moui_gl_create_shader_program(moui_s("moui default shader"), 1, &vertex_shader, 1, &fragment_shader);
+            default_state->base.renderer.gl.shader_color_map = moui_glGetUniformLocation(default_state->base.renderer.gl.shader, "color_map");
+            moui_assert(default_state->base.renderer.gl.shader_color_map != -1);
         }
         else
         {
             moui_require(ReleaseDC(win32_gl_init_window, win32_gl_init_device_context));
             moui_require(DestroyWindow(win32_gl_init_window));
-        }
-
-        moui_require(wglMakeCurrent(default_state->win32_gl_init_device_context, default_state->win32_gl_context));
+        }    
     }
-#endif
     
     {
         moui_u8 white = 255;
@@ -1007,14 +1198,17 @@ moui_default_init_signature
     }
 
     // enable v-sync
-    //wglSwapIntervalEXT(1);
+    moui_gl_load(wglSwapIntervalEXT);
+    if (moui_wglSwapIntervalEXT)
+        moui_wglSwapIntervalEXT(1);
 }
 
 moui_default_window_init_signature
 {
     moui_assert(default_state->win32_gl_context); // call moui_init first
     moui_assert(window->device_context);
-    if (default_state->win32_gl_is_modern)
+
+    if (default_state->base.renderer.gl.is_modern)
         moui_win32_gl_window_init_modern(window->device_context);
     else
         moui_win32_gl_window_init(window->device_context);
@@ -1049,241 +1243,296 @@ moui_default_render_prepare_execute_signature
 
     moui_gl_check(glClearColor(0, 0, 0, 1));
     moui_gl_check(glClear(GL_COLOR_BUFFER_BIT));
+
+    moui_gl_check(glDisable(GL_DEPTH_TEST));
 }
 
-
-#if 0
-typedef struct
+moui_gl_create_shader_object_signature
 {
-    moui_u8 *handle;
-} moui_shader;
-
-#define moui_gl_reload_shader_signature moui_shader moui_gl_reload_shader(moui_default_state *default_state, moui_string name, moui_u32 vertex_source_count, moui_string *vertex_sources, moui_u32 fragment_source_count, moui_string *fragment_sources)
-
-func reload_shader(gl gl_api ref, shader lang_typed_value, name string, vertex_attribute_prefix = "vertex_", vertex_attributes_enum lang_type_info, uniform_buffer_bindings_enum = {} lang_type_info, expand vertex_shader_sources string[], source_separation b8, expand fragment_shader_sources string[], error_memory memory_arena ref = null) (ok b8, error_messages string)
-{
-    assert(shader.type.type_type is lang_type_info_type.compound);
-
-    var compound = shader.type.compound_type deref;
-    var handle u32 ref;
-    loop var i; compound.fields.count
+    moui_u32 shader_kind_map[] =
     {
-        if compound.fields[i].name is "handle"
-        {
-            assert(compound.fields[i].type.type_type is lang_type_info_type.number);
-            var number_type = compound.fields[i].type.number_type deref;
-            assert(number_type.number_type is lang_type_info_number_type.u32);
-
-            handle = (shader.base + compound.fields[i].byte_offset) cast(u32 ref);
-            break;
-        }
-    }
-    assert(handle is_not null, "shader struct has no handle u32 field");
-
-    var result = create_shader_object(gl, name, false, vertex_shader_sources, error_memory);
-    if not result.shader_object
-        return false, result.error_messages;
-
-    var vertex_shader = result.shader_object;
-
-    result = create_shader_object(gl, name, true, fragment_shader_sources, error_memory);
-    if not result.shader_object
-    {
-        glDeleteShader(vertex_shader); // TODO: add defer
-        return false, result.error_messages;
-    }
-
-    var fragment_shader = result.shader_object;
-
-    var program = create_program_begin(gl);
-
-    create_program_add_shader(gl, program, vertex_shader);
-    create_program_add_shader(gl, program, fragment_shader);
-
-    create_program_bind_attributes(gl, program, vertex_attributes_enum, vertex_attribute_prefix);
-
-    var program_result = create_program_end(gl, program, name, error_memory);
-
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
-
-    if not program_result.ok
-        return false, program_result.error_messages;
-
-    if handle deref
-        glDeleteProgram(handle deref);
-
-    handle deref = program;
-
-    loop var i; compound.fields.count
-    {
-        if compound.fields[i].name is_not "handle"
-        {
-            assert(compound.fields[i].type.type_type is lang_type_info_type.number);
-            var number_type = compound.fields[i].type.number_type deref;
-            assert(number_type.number_type is lang_type_info_number_type.s32);
-
-            var location = (shader.base + compound.fields[i].byte_offset) cast(s32 ref);
-
-            var name u8[256];
-            write(name, "%\0", compound.fields[i].name);
-
-            location deref = glGetUniformLocation(program, name.base);
-            //assert(location deref is_not -1);
-        }
-    }
-
-    if uniform_buffer_bindings_enum.reference
-        gl_bind_shader_uniform_blocks(program, uniform_buffer_bindings_enum);
-
-    return true, {} string;
-}
-
-func create_shader_object(gl gl_api ref, name string, is_fragment_shader b8, expand sources string[], error_memory memory_arena ref = null) (shader_object u32, error_messages string)
-{
-    var shader_kind_map =
-    [
         GL_VERTEX_SHADER,
         GL_FRAGMENT_SHADER
-    ] GLuint[];
+    };
 
-    var gl_shader_kind = shader_kind_map[is_fragment_shader];
-    var shader_object = glCreateShader(gl_shader_kind);
+    moui_u32 gl_shader_kind = shader_kind_map[is_fragment_shader];
+    moui_u32 shader_object = moui_glCreateShader(gl_shader_kind);
 
-    var source_bases  u8 ref [32];
-    var source_counts s32[32];
-    assert(sources.count <= source_bases.count);
+    moui_u8  *source_bases[32];
+    moui_s32 source_counts[moui_carray_count(source_bases)];
+    moui_assert(source_count <= moui_carray_count(source_bases));
 
-    loop var i; sources.count
+    for (moui_u32 i = 0; i < source_count; i++)
     {
         source_bases[i]  = sources[i].base;
-        source_counts[i] = sources[i].count cast(s32);
+        source_counts[i] = (moui_s32) sources[i].count;
     }
 
-    glShaderSource(shader_object, sources.count cast(s32), source_bases.base, source_counts.base);
+    moui_glShaderSource(shader_object, (moui_s32) source_count, (char **) source_bases, source_counts);
 
-    glCompileShader(shader_object);
+    moui_glCompileShader(shader_object);
 
-    var is_compiled GLint;
-    glGetShaderiv(shader_object, GL_COMPILE_STATUS, is_compiled ref);
-    if is_compiled is GL_FALSE
-    {
-        var error_messages string;
-        if error_memory
-        {
-            def shader_type_names = [ "vertex", "fragment" ] string[];
+    GLint is_compiled;
+    moui_glGetShaderiv(shader_object, GL_COMPILE_STATUS, &is_compiled);
+    moui_require(is_compiled);
 
-            write(error_memory, error_messages ref, "GLSL Compile Error: could not compile % shader %\n", shader_type_names[is_fragment_shader], name);
-
-            var info_byte_count GLint;
-            glGetShaderiv(shader_object, GL_INFO_LOG_LENGTH, info_byte_count ref);
-
-            var offset = error_messages.count;
-            reallocate_array(error_memory, error_messages ref, error_messages.count + info_byte_count cast(u32));
-            glGetShaderInfoLog(shader_object, info_byte_count, info_byte_count ref cast(GLsizei ref), error_messages[offset] ref cast(GLchar ref));
-        }
-        else
-        {
-            if not is_fragment_shader
-                print("GLSL Compile Error: could not compile vertex shader %\n", name);
-            else
-                print("GLSL Compile Error: could not compile fragment shader %\n", name);
-
-            var message_buffer u8[4096];
-            var info_byte_count GLint;
-            glGetShaderiv(shader_object, GL_INFO_LOG_LENGTH, info_byte_count ref);
-
-            if info_byte_count > (message_buffer.count cast(GLint))
-                info_byte_count = message_buffer.count cast(GLint);
-
-            glGetShaderInfoLog(shader_object, info_byte_count, info_byte_count ref cast(GLsizei ref), error_messages.base cast(GLchar ref));
-            var message = { info_byte_count cast(usize), message_buffer.base } string;
-            print("%\n", message);
-        }
-
-        glDeleteShader(shader_object);
-        return 0, error_messages;
-    }
-
-    return shader_object, {} string;
+    return shader_object;
 }
-#endif
+
+moui_gl_create_shader_program_signature
+{   
+    moui_u32 vertex_shader   = moui_gl_create_shader_object(name, moui_false, vertex_source_count,   vertex_sources);
+    moui_u32 fragment_shader = moui_gl_create_shader_object(name, moui_true,  fragment_source_count, fragment_sources);
+    
+    moui_u32 program = moui_glCreateProgram();
+    moui_glAttachShader(program, vertex_shader);
+    moui_glAttachShader(program, fragment_shader);
+
+    {                    
+        moui_glBindAttribLocation(program, 0, "vertex_position");
+        moui_glBindAttribLocation(program, 1, "vertex_uv");
+        moui_glBindAttribLocation(program, 2, "vertex_color");
+    }
+
+    moui_glLinkProgram(program);
+
+    GLint is_linked;
+    moui_glGetProgramiv(program, GL_LINK_STATUS, &is_linked);
+    moui_require(is_linked);
+
+    moui_glDeleteShader(vertex_shader);
+    moui_glDeleteShader(fragment_shader);
+
+    return program;
+}
+
+void moui_gl_resize_vertex_buffer(moui_gl_buffer *buffer, moui_u32 vertex_count, moui_vertex *vertices)
+{
+    buffer->used_count = vertex_count;
+    moui_u32 new_total_count = moui_u32_max(buffer->total_count, 2 * buffer->used_count);
+        
+    if (new_total_count > buffer->total_count)
+    {                
+        buffer->total_count = new_total_count;
+
+        if (buffer->array_buffer_object)
+        {   
+            moui_assert(buffer->array_object);
+            moui_glDeleteVertexArrays(1, &buffer->array_object);
+            moui_glDeleteBuffers(1, &buffer->array_buffer_object);
+        }
+            
+        moui_glGenVertexArrays(1, &buffer->array_object);       
+        moui_require(buffer->array_object);
+        moui_glBindVertexArray(buffer->array_object);
+
+        moui_glGenBuffers(1, &buffer->array_buffer_object);
+        moui_require(buffer->array_buffer_object);
+        moui_glBindBuffer(GL_ARRAY_BUFFER, buffer->array_buffer_object);
+
+        // vec2 position
+        moui_usize byte_offset = 0;
+        moui_glEnableVertexAttribArray(0);
+        moui_glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(moui_vertex), (void *) byte_offset);
+        byte_offset += sizeof(moui_vec2);
+
+        // vec2 uv
+        moui_glEnableVertexAttribArray(1);
+        moui_glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(moui_vertex), (void *) byte_offset);
+        byte_offset += sizeof(moui_vec2);
+
+        // vec4 color
+        moui_glEnableVertexAttribArray(2);
+        moui_glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(moui_vertex), (void *) byte_offset);
+        byte_offset += sizeof(moui_rgba);    
+
+        moui_glBufferData(GL_ARRAY_BUFFER, buffer->total_count * sizeof(moui_vertex), moui_null, GL_DYNAMIC_DRAW);
+        moui_glBufferSubData(GL_ARRAY_BUFFER, 0, buffer->used_count * sizeof(moui_vertex), vertices);
+
+        // order is important
+        moui_glBindVertexArray(0);
+        moui_glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+    else if (buffer->used_count)
+    {
+        moui_assert(buffer->array_buffer_object);
+        moui_glBindBuffer(GL_ARRAY_BUFFER, buffer->array_buffer_object);        
+        
+        moui_glBufferSubData(GL_ARRAY_BUFFER, 0, buffer->used_count * sizeof(moui_vertex), vertices);
+        
+        moui_glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+}
 
 moui_execute_signature
 {
 #if defined moui_debug
     moui_assert(state->debug_is_in_frame);
     state->debug_is_in_frame = moui_false;
-#endif
+#endif    
 
     moui_renderer *renderer = &state->renderer;
-
-    moui_gl_check(glEnable(GL_BLEND));
-    // TODO: switch to premultiplied alpha
-    // moui_gl_check(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
-    moui_gl_check(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
 
     // force applying last command
     moui_set_command(state, renderer->current_command.layer + 1, 0);
 
-    moui_u32 command_count = moui_u32_min(renderer->command_request_count, renderer->command_count);
+    if ((renderer->command_request_count > renderer->command_count) || (renderer->quad_request_count > renderer->quad_count) || (renderer->texture_request_count > renderer->texture_count))
+        return;
+
+    moui_gl_check(glEnable(GL_BLEND));    
+    moui_gl_check(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
+
+    moui_u32 command_count = renderer->command_request_count;
 
     moui_vec2 gl_viewport_scale = { 2.0f / renderer->canvas_size.x, 2.0f / renderer->canvas_size.y };
 
-    // TODO: sort by layer and texture
-    for (moui_s32 layer = renderer->min_layer; layer <= renderer->max_layer; layer++)
+    if (state->renderer.gl.is_modern)
     {
-        moui_u32 quad_offset = 0;
+        renderer->vertex_request_count = moui_u32_max(renderer->vertex_request_count, renderer->quad_request_count * 6);    
+        if (renderer->quad_request_count * 6 > renderer->vertex_count)
+            return;
 
-        for (moui_u32 command_index = 0; command_index < command_count; command_index++)
-        {
-            moui_command command = renderer->commands[command_index];
-            if (quad_offset + command.quad_count > renderer->quad_count)
-                break;
+        moui_vertex *sorted_vertices = renderer->vertices;
+        moui_u32 sorted_vertex_count = 0;
 
-            if (command.layer != layer)
-            {
-                quad_offset += command.quad_count;
-                continue;
-            }
+        for (moui_s32 layer = renderer->min_layer; layer <= renderer->max_layer; layer++)
+        {                        
+            for (moui_s32 texture_index = 0; texture_index < renderer->texture_count; texture_index++)
+            {        
+                moui_u32 quad_offset = 0;    
 
-            moui_u32 texture_handle = (moui_u32) (moui_usize) renderer->textures[command.texture_index].handle;
-            if (texture_handle)
-            {
-                moui_gl_check(glEnable(GL_TEXTURE_2D));
-            }
-            else
-            {
-                moui_gl_check(glDisable(GL_TEXTURE_2D));
-            }
-
-            moui_gl_check(glBindTexture(GL_TEXTURE_2D, texture_handle));
-
-            glBegin(GL_TRIANGLES);
-
-            for (moui_u32 quad_index = 0; quad_index < command.quad_count; quad_index++)
-            {
-                moui_vertex vertices[6];
-
-                vertices[0] = renderer->quads[quad_offset + quad_index].vertices[0];
-                vertices[1] = renderer->quads[quad_offset + quad_index].vertices[1];
-                vertices[2] = renderer->quads[quad_offset + quad_index].vertices[2];
-
-                vertices[3] = vertices[0];
-                vertices[4] = vertices[2];
-                vertices[5] = renderer->quads[quad_offset + quad_index].vertices[3];
-
-                for (moui_u32 vertex_index = 0; vertex_index < moui_carray_count(vertices); vertex_index++)
+                for (moui_u32 command_index = 0; command_index < command_count; command_index++)
                 {
-                    glTexCoord2f(vertices[vertex_index].uv.x, vertices[vertex_index].uv.y);
-                    glColor4f(vertices[vertex_index].color.r, vertices[vertex_index].color.g, vertices[vertex_index].color.b, vertices[vertex_index].color.a);
-                    glVertex2f(vertices[vertex_index].position.x * gl_viewport_scale.x - 1, vertices[vertex_index].position.y * gl_viewport_scale.y - 1);
+                    moui_command command = renderer->commands[command_index];                    
+                    if ((command.layer != layer) || (command.texture_index != texture_index))                                    
+                    {
+                        quad_offset += command.quad_count;
+                        continue;                    
+                    }
+
+                    for (moui_u32 quad_index = 0; quad_index < command.quad_count; quad_index++)
+                    {
+                        moui_vertex *vertices = sorted_vertices + sorted_vertex_count;
+                        sorted_vertex_count += 6;
+
+                        vertices[0] = renderer->quads[quad_offset + quad_index].vertices[0];
+                        vertices[1] = renderer->quads[quad_offset + quad_index].vertices[1];
+                        vertices[2] = renderer->quads[quad_offset + quad_index].vertices[2];
+
+                        vertices[3] = vertices[0];
+                        vertices[4] = vertices[2];
+                        vertices[5] = renderer->quads[quad_offset + quad_index].vertices[3];                     
+                    }
+
+                    quad_offset += command.quad_count;
+                }
+            }        
+        }
+
+        // transform from ui to clip space
+        for (moui_s32 vertex_index = 0; vertex_index < sorted_vertex_count; vertex_index++)
+        {            
+            sorted_vertices[vertex_index].position.x = sorted_vertices[vertex_index].position.x * gl_viewport_scale.x - 1;
+            sorted_vertices[vertex_index].position.y = sorted_vertices[vertex_index].position.y * gl_viewport_scale.y - 1;
+        }
+
+        moui_gl_resize_vertex_buffer(&state->renderer.gl.vertex_buffer, sorted_vertex_count, sorted_vertices);
+
+        moui_glUseProgram(state->renderer.gl.shader);    
+        
+        moui_glUniform1i(state->renderer.gl.shader_color_map, 0);
+        moui_glActiveTexture(GL_TEXTURE0);
+
+        moui_glBindVertexArray(state->renderer.gl.vertex_buffer.array_object);        
+
+        {
+            moui_u32 vertex_offset = 0;
+
+            for (moui_s32 layer = renderer->min_layer; layer <= renderer->max_layer; layer++)
+            {                            
+                for (moui_s32 texture_index = 0; texture_index < renderer->texture_count; texture_index++)
+                {            
+                    for (moui_u32 command_index = 0; command_index < command_count; command_index++)
+                    {
+                        moui_command command = renderer->commands[command_index];                    
+                        if ((command.layer != layer) || (command.texture_index != texture_index))                                                            
+                            continue;                        
+
+                        moui_u32 texture_handle = (moui_u32) (moui_usize) renderer->textures[command.texture_index].handle;
+                        glBindTexture(GL_TEXTURE_2D, texture_handle);
+
+                        glDrawArrays(GL_TRIANGLES, vertex_offset, command.quad_count * 6);
+                        vertex_offset += command.quad_count * 6;
+                    }
                 }
             }
 
-            moui_gl_check(glEnd());
+            moui_assert(vertex_offset == sorted_vertex_count);
+        }
 
-            quad_offset += command.quad_count;
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        moui_glBindVertexArray(0);
+
+        moui_glUseProgram(0);
+    }
+    else
+    {
+        // TODO: sort by layer and texture
+        for (moui_s32 layer = renderer->min_layer; layer <= renderer->max_layer; layer++)
+        {
+            moui_u32 quad_offset = 0;
+
+            for (moui_u32 command_index = 0; command_index < command_count; command_index++)
+            {
+                moui_command command = renderer->commands[command_index];
+                if (quad_offset + command.quad_count > renderer->quad_count)
+                    break;
+
+                if (command.layer != layer)
+                {
+                    quad_offset += command.quad_count;
+                    continue;
+                }
+
+                moui_u32 texture_handle = (moui_u32) (moui_usize) renderer->textures[command.texture_index].handle;
+                if (texture_handle)
+                {
+                    moui_gl_check(glEnable(GL_TEXTURE_2D));
+                }
+                else
+                {
+                    moui_gl_check(glDisable(GL_TEXTURE_2D));
+                }
+
+                moui_gl_check(glBindTexture(GL_TEXTURE_2D, texture_handle));
+
+                glBegin(GL_TRIANGLES);
+
+                for (moui_u32 quad_index = 0; quad_index < command.quad_count; quad_index++)
+                {
+                    moui_vertex vertices[6];
+
+                    vertices[0] = renderer->quads[quad_offset + quad_index].vertices[0];
+                    vertices[1] = renderer->quads[quad_offset + quad_index].vertices[1];
+                    vertices[2] = renderer->quads[quad_offset + quad_index].vertices[2];
+
+                    vertices[3] = vertices[0];
+                    vertices[4] = vertices[2];
+                    vertices[5] = renderer->quads[quad_offset + quad_index].vertices[3];
+
+                    for (moui_u32 vertex_index = 0; vertex_index < moui_carray_count(vertices); vertex_index++)
+                    {
+                        glTexCoord2f(vertices[vertex_index].uv.x, vertices[vertex_index].uv.y);
+                        glColor4f(vertices[vertex_index].color.r, vertices[vertex_index].color.g, vertices[vertex_index].color.b, vertices[vertex_index].color.a);
+                        glVertex2f(vertices[vertex_index].position.x * gl_viewport_scale.x - 1, vertices[vertex_index].position.y * gl_viewport_scale.y - 1);
+                    }
+                }
+
+                moui_gl_check(glEnd());
+
+                quad_offset += command.quad_count;
+            }
         }
     }
 }
@@ -1336,6 +1585,9 @@ moui_set_buffers_signature
 {
     state->renderer.quads      = quads;
     state->renderer.quad_count = quad_count;
+
+    state->renderer.vertices     = vertices;
+    state->renderer.vertex_count = vertex_count;
 
     state->renderer.textures      = textures;
     state->renderer.texture_count = texture_count;
@@ -1480,8 +1732,17 @@ moui_add_quad_signature
     return ok;
 }
 
+moui_premultiply_alpha_signature
+{
+    color.r *= color.a;
+    color.g *= color.a;
+    color.b *= color.a;
+    return color;
+}
+
 moui_to_quad_colors_signature
 {
+    color = moui_premultiply_alpha(color);
     return moui_sl(moui_quad_colors) { color, color, color, color };
 }
 
@@ -2209,7 +2470,7 @@ moui_load_font_signature
     return result_texture;
 }
 
-#if defined moui_gl1
+#if defined moui_gl_implementation
 
 moui_gl_load_font_signature
 {
@@ -2323,6 +2584,9 @@ moui_resize_buffers_signature
     state->renderer.quad_count = moui_u32_max(state->renderer.quad_count, state->renderer.quad_request_count);
     state->renderer.quads = moma_allocate_array(arena, moui_quad, state->renderer.quad_count);
 
+    state->renderer.vertex_count = moui_u32_max(state->renderer.vertex_count, state->renderer.vertex_request_count);
+    state->renderer.vertices = moma_allocate_array(arena, moui_vertex, state->renderer.vertex_count);
+
     // we do a doubling stratagy, since we don't know how many different textures we missed
     if (state->renderer.texture_request_count > state->renderer.texture_count)
         state->renderer.texture_count = moui_u32_max(4, 2 * state->renderer.texture_count);
@@ -2331,7 +2595,7 @@ moui_resize_buffers_signature
     state->renderer.command_count = moui_u32_max(state->renderer.command_count, state->renderer.command_request_count);
     state->renderer.commands = moma_allocate_array(arena, moui_command, state->renderer.command_count);
 
-    moui_set_buffers(state, state->renderer.quads, state->renderer.quad_count, state->renderer.textures, state->renderer.texture_count, state->renderer.commands, state->renderer.command_count);
+    moui_set_buffers(state, state->renderer.quad_count, state->renderer.quads, state->renderer.vertex_count, state->renderer.vertices, state->renderer.texture_count, state->renderer.textures, state->renderer.command_count, state->renderer.commands);
 
     {
         moui_usize previous_item_count = state->renderer.default_atlas.item_count;
