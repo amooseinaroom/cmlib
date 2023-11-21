@@ -5,6 +5,8 @@
 
 // #define moui_gl_implementation
 // - use open gl rendering
+// #define moui_gl_symbols
+// - skip defining and loading gl functions and definitions
 // include stb_turetype.h
 // - use stbe_truetype to load font data
 // include mo_platform.h and mo_memory_arena.h
@@ -469,6 +471,13 @@ moui_execute_signature;
 // default functions
 // if you don't have your own rendering api set up, you can use these default functions
 
+#if defined mop_h
+
+#define moui_get_default_platform_window_signature moui_default_window moui_get_default_platform_window(moui_default_state *default_state, mop_platform *platform, mop_window window)
+moui_get_default_platform_window_signature;
+
+#endif
+
 #define moui_default_init_signature void moui_default_init(moui_default_state *default_state)
 moui_default_init_signature;
 
@@ -752,7 +761,14 @@ moui_box_is_hot_signature
 
 #if defined moui_gl_implementation
 
+// internal
+
+#define moui_platform_init_signature void moui_platform_init(moui_default_state *default_state)
+moui_platform_init_signature;
+
 #if defined(_WIN32) || defined(WIN32)
+
+#if !defined moui_gl_symbols
 
 #include <windows.h>
 #include <GL/gl.h>
@@ -787,16 +803,12 @@ moui_wglCreateContextAttribsARB_function moui_wglCreateContextAttribsARB;
 typedef signed int  (*moui_wglSwapIntervalEXT_function)(signed int interval);
 moui_wglSwapIntervalEXT_function moui_wglSwapIntervalEXT;
 
+#endif
+
 struct moui_default_window
 {
     HDC device_context;
 };
-
-#else
-
-#error moui_gl_implementation not implemented for current platform
-
-#endif
 
 struct moui_default_state
 {
@@ -808,7 +820,296 @@ struct moui_default_state
     HDC     win32_gl_current_device_context;    
 };
 
-#define moui_gl_check(x) x; moui_gl_error(# x, __FUNCTION__, __LINE__)
+void moui_win32_gl_window_init(HDC device_context)
+{
+    PIXELFORMATDESCRIPTOR format_descriptor = {
+        sizeof(PIXELFORMATDESCRIPTOR),   // size of this pfd
+        1,                     // version number
+        PFD_DRAW_TO_WINDOW |   // support window
+        PFD_SUPPORT_OPENGL |   // support OpenGL
+        PFD_DOUBLEBUFFER,      // double buffered
+        PFD_TYPE_RGBA,         // RGBA type
+        24,                    // 24-bit color depth
+        0, 0, 0, 0, 0, 0,      // color bits ignored
+        0,                     // no alpha buffer
+        0,                     // shift bit ignored
+        0,                     // no accumulation buffer
+        0, 0, 0, 0,            // accum bits ignored
+        32,                    // 32-bit z-buffer
+        0,                     // no stencil buffer
+        0,                     // no auxiliary buffer
+        PFD_MAIN_PLANE,        // main layer
+        0,                     // reserved
+        0, 0, 0                // layer masks ignored
+    };
+
+    moui_s32 format = ChoosePixelFormat(device_context, &format_descriptor);
+    moui_require(SetPixelFormat(device_context, format, &format_descriptor));
+}
+
+void moui_win32_gl_window_init_modern(HDC device_context)
+{
+    moui_s32 pixel_format_attributes[] =
+    {
+        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+        WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+        WGL_DOUBLE_BUFFER_ARB,  GL_TRUE,
+        WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
+        WGL_COLOR_BITS_ARB, 24,
+        WGL_DEPTH_BITS_ARB, 24,
+        WGL_STENCIL_BITS_ARB, 8,
+
+        // multi sample anti aliasing
+        // WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, // Number of buffers (must be 1 at time of writing)
+        // WGL_SAMPLES_ARB, 1,  // Number of samples
+
+        0 // end
+    };
+
+    moui_s32 pixel_format;
+    moui_u32 pixel_format_count;
+    moui_require(moui_wglChoosePixelFormatARB(device_context, pixel_format_attributes, moui_null, 1, &pixel_format, &pixel_format_count));
+    moui_require(SetPixelFormat(device_context, pixel_format, moui_null));
+}
+
+moui_platform_init_signature
+{
+    WNDCLASS window_class = {0};
+    window_class.lpfnWndProc   = DefWindowProc;
+    window_class.hInstance     = (HINSTANCE) GetModuleHandleA(moui_null);
+    window_class.lpszClassName = "moui init window class";
+    moui_require(RegisterClass(&window_class));
+
+    default_state->win32_gl_init_window = CreateWindowExA(0, window_class.lpszClassName, window_class.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, moui_null, moui_null, window_class.hInstance, moui_null);
+    moui_require(default_state->win32_gl_init_window);
+
+    default_state->win32_gl_init_device_context = GetDC(default_state->win32_gl_init_window);
+    moui_require(default_state->win32_gl_init_device_context);
+
+    moui_win32_gl_window_init(default_state->win32_gl_init_device_context);
+
+    default_state->win32_gl_context = wglCreateContext(default_state->win32_gl_init_device_context);
+    moui_require(default_state->win32_gl_context);
+
+    moui_require(wglMakeCurrent(default_state->win32_gl_init_device_context, default_state->win32_gl_context));
+
+    moui_gl_load(wglChoosePixelFormatARB);
+    moui_gl_load(wglCreateContextAttribsARB);
+
+    if (moui_wglChoosePixelFormatARB && moui_wglCreateContextAttribsARB)
+    {
+        moui_require(wglMakeCurrent(moui_null, moui_null));
+
+        HWND win32_gl_init_window = CreateWindowExA(0, window_class.lpszClassName, window_class.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, moui_null, moui_null, window_class.hInstance, moui_null);
+        moui_require(win32_gl_init_window);
+
+        HDC win32_gl_init_device_context = GetDC(win32_gl_init_window);
+        moui_require(win32_gl_init_device_context);
+
+        moui_win32_gl_window_init_modern(win32_gl_init_device_context);
+
+        moui_s32 context_attributes[] =
+        {
+            WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+            WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+            WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+            WGL_CONTEXT_FLAGS_ARB,         WGL_CONTEXT_DEBUG_BIT_ARB,
+            0
+        };
+
+        //if backwards_compatible
+            //{ context_attributes[7] = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB; }
+
+        HGLRC win32_gl_context = moui_wglCreateContextAttribsARB(win32_gl_init_device_context, moui_null, context_attributes);        
+        if (win32_gl_context)
+        {
+            moui_require(wglDeleteContext(default_state->win32_gl_context));
+            moui_require(ReleaseDC(default_state->win32_gl_init_window, default_state->win32_gl_init_device_context));
+            moui_require(DestroyWindow(default_state->win32_gl_init_window));
+
+            default_state->win32_gl_init_window         = win32_gl_init_window;
+            default_state->win32_gl_init_device_context = win32_gl_init_device_context;
+            default_state->win32_gl_context             = win32_gl_context;
+            default_state->base.renderer.gl.is_modern   = moui_true;
+
+            moui_require(wglMakeCurrent(default_state->win32_gl_init_device_context, default_state->win32_gl_context));
+        }    
+        else
+        {        
+            moui_require(ReleaseDC(win32_gl_init_window, win32_gl_init_device_context));
+            moui_require(DestroyWindow(win32_gl_init_window));
+        }
+    }
+
+    // enable v-sync
+    moui_gl_load(wglSwapIntervalEXT);
+
+    if (moui_wglSwapIntervalEXT)
+        moui_wglSwapIntervalEXT(1);
+}
+
+moui_get_default_platform_window_signature
+{
+    moui_default_window default_window = { window->device_context };
+    return default_window;
+}
+
+moui_default_window_init_signature
+{
+    moui_assert(default_state->win32_gl_context); // call moui_init first
+    moui_assert(window->device_context);
+
+    if (default_state->base.renderer.gl.is_modern)
+        moui_win32_gl_window_init_modern(window->device_context);
+    else
+        moui_win32_gl_window_init(window->device_context);
+}
+
+moui_default_render_begin_signature
+{
+    moui_assert(default_state->win32_gl_context); // call moui_init first
+    moui_assert(window->device_context);
+    // TODO: assert on moui_default_window_init being called
+
+    if (default_state->win32_gl_current_device_context != window->device_context)
+    {
+        wglMakeCurrent(window->device_context, default_state->win32_gl_context);
+        default_state->win32_gl_current_device_context = window->device_context;
+    }
+}
+
+moui_default_render_end_signature
+{
+    moui_assert(default_state->win32_gl_context); // call moui_init first
+    moui_assert(window->device_context);
+
+    moui_assert(default_state->win32_gl_current_device_context == window->device_context);
+    SwapBuffers(window->device_context);
+}
+
+#elif __EMSCRIPTEN__
+
+#if !defined moui_gl_symbols
+
+#include <EGL/egl.h>
+#include <GLES/gl.h>
+#include <GLES3/gl3.h>
+#include <GLES3/gl2ext.h>
+//#include <GLES3/gl3platform.h>
+
+#define moui_gl_load(function) moui_ ## function = (moui_ ## function ## _function) eglGetProcAddress(# function)
+
+#endif
+
+struct moui_default_window
+{
+    EGLSurface surface;
+};
+
+struct moui_default_state
+{
+    moui_state base;
+    
+    EGLDisplay display;
+    EGLConfig  config;
+    EGLSurface init_surface;    
+    EGLSurface current_surface;    
+    EGLContext gl_context;    
+};
+
+moui_platform_init_signature
+{
+    default_state->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    moui_require(default_state->display != EGL_NO_DISPLAY);
+
+    moui_require(eglInitialize(default_state->display, moui_null, moui_null));
+            
+    {
+        moui_s32 attributes[] =
+        {
+            EGL_RED_SIZE,       5,
+            EGL_GREEN_SIZE,     6,
+            EGL_BLUE_SIZE,      5,
+            //EGL_ALPHA_SIZE,     EGL_DONT_CARE,
+            //EGL_DEPTH_SIZE,     EGL_DONT_CARE,
+            //EGL_STENCIL_SIZE,   EGL_DONT_CARE,
+            EGL_SAMPLE_BUFFERS, 0,
+            EGL_NONE
+        };
+
+        moui_s32 config_count;
+        moui_require(eglGetConfigs(default_state->display, moui_null, 0, &config_count));        
+        moui_require(eglChooseConfig(default_state->display, attributes, &default_state->config, 1, &config_count));   
+    }
+    
+    default_state->init_surface = eglCreateWindowSurface(default_state->display, default_state->config, 0, moui_null);
+    moui_require(default_state->init_surface != EGL_NO_SURFACE); 
+    
+    {
+        moui_s32 attributes[] = 
+        {
+            EGL_CONTEXT_CLIENT_VERSION,       2,            
+            //EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+            //EGL_CONTEXT_OPENGL_DEBUG,        EGL_TRUE,            
+            EGL_NONE,
+            EGL_NONE
+        };
+
+        default_state->gl_context = eglCreateContext(default_state->display, default_state->config, EGL_NO_CONTEXT, attributes);
+        moui_require(default_state->gl_context != EGL_NO_CONTEXT);
+    }
+
+    moui_require(eglMakeCurrent(default_state->display, default_state->init_surface, default_state->init_surface, default_state->gl_context));
+    default_state->current_surface = default_state->init_surface;
+
+    default_state->base.renderer.gl.is_modern = moui_true;
+}
+
+moui_get_default_platform_window_signature
+{
+    moui_default_window default_window = {0};
+    return default_window;
+}
+
+moui_default_window_init_signature
+{
+    moui_assert(default_state->gl_context != EGL_NO_CONTEXT); // call moui_init first
+    moui_assert(window->surface == EGL_NO_SURFACE);
+
+    moui_assert(default_state->base.renderer.gl.is_modern);        
+
+    window->surface = eglCreateWindowSurface(default_state->display, default_state->config, 0, moui_null);
+    moui_require(window->surface != EGL_NO_SURFACE); 
+}
+
+moui_default_render_begin_signature
+{
+    moui_assert(default_state->gl_context != EGL_NO_CONTEXT); // call moui_init first
+    moui_assert(window->surface != EGL_NO_SURFACE);    
+
+    if (default_state->current_surface != window->surface)
+    {
+        moui_require(eglMakeCurrent(default_state->display, window->surface, window->surface, default_state->gl_context));
+        default_state->current_surface = window->surface;    
+    }
+}
+
+moui_default_render_end_signature
+{
+    moui_assert(default_state->gl_context != EGL_NO_CONTEXT); // call moui_init first
+    moui_assert(window->surface != EGL_NO_SURFACE);
+
+    moui_assert(default_state->current_surface == window->surface);
+    eglSwapBuffers(default_state->display, window->surface);
+}
+
+#else
+
+#error moui_gl_implementation not implemented for current platform
+
+#endif
+
+#define moui_gl_check(x) x; moui_gl_error(# x, (moui_cstring) __FUNCTION__, __LINE__)
 
 void moui_gl_error(moui_cstring command, moui_cstring function, moui_u32 line)
 {
@@ -843,10 +1144,16 @@ void moui_gl_error(moui_cstring command, moui_cstring function, moui_u32 line)
 
         if (!found)
             printf("gl error %s unknown error %i\n", command, error);
-}
     }
+}
+
+#if defined moui_gl_symbols
+#define moui_gl_load(function)
+#endif
 
 #define moui_gl_required_load(function) moui_gl_load(function); moui_require(moui_ ## function)
+
+#if !defined moui_gl_symbols
 
 #define GL_TEXTURE_SWIZZLE_RGBA 0x8E46
 #define GL_VERTEX_SHADER 0x8B31
@@ -930,6 +1237,8 @@ moui_glUniform1i_function moui_glUniform1i;
 typedef void (*moui_glActiveTexture_function)(GLenum texture);
 moui_glActiveTexture_function moui_glActiveTexture;
 
+#endif
+
 moui_create_texture_signature
 {
     moui_texture texture;
@@ -990,58 +1299,6 @@ moui_update_texture_box_signature
     moui_gl_check(glBindTexture(GL_TEXTURE_2D, texture_handle));
 }
 
-void moui_win32_gl_window_init(HDC device_context)
-{
-    PIXELFORMATDESCRIPTOR format_descriptor = {
-        sizeof(PIXELFORMATDESCRIPTOR),   // size of this pfd
-        1,                     // version number
-        PFD_DRAW_TO_WINDOW |   // support window
-        PFD_SUPPORT_OPENGL |   // support OpenGL
-        PFD_DOUBLEBUFFER,      // double buffered
-        PFD_TYPE_RGBA,         // RGBA type
-        24,                    // 24-bit color depth
-        0, 0, 0, 0, 0, 0,      // color bits ignored
-        0,                     // no alpha buffer
-        0,                     // shift bit ignored
-        0,                     // no accumulation buffer
-        0, 0, 0, 0,            // accum bits ignored
-        32,                    // 32-bit z-buffer
-        0,                     // no stencil buffer
-        0,                     // no auxiliary buffer
-        PFD_MAIN_PLANE,        // main layer
-        0,                     // reserved
-        0, 0, 0                // layer masks ignored
-    };
-
-    moui_s32 format = ChoosePixelFormat(device_context, &format_descriptor);
-    moui_require(SetPixelFormat(device_context, format, &format_descriptor));
-}
-
-void moui_win32_gl_window_init_modern(HDC device_context)
-{
-    moui_s32 pixel_format_attributes[] =
-    {
-        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-        WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-        WGL_DOUBLE_BUFFER_ARB,  GL_TRUE,
-        WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-        WGL_COLOR_BITS_ARB, 24,
-        WGL_DEPTH_BITS_ARB, 24,
-        WGL_STENCIL_BITS_ARB, 8,
-
-        // multi sample anti aliasing
-        // WGL_SAMPLE_BUFFERS_ARB, GL_TRUE, // Number of buffers (must be 1 at time of writing)
-        // WGL_SAMPLES_ARB, 1,  // Number of samples
-
-        0 // end
-    };
-
-    moui_s32 pixel_format;
-    moui_u32 pixel_format_count;
-    moui_require(moui_wglChoosePixelFormatARB(device_context, pixel_format_attributes, moui_null, 1, &pixel_format, &pixel_format_count));
-    moui_require(SetPixelFormat(device_context, pixel_format, moui_null));
-}
-
 #define moui_gl_create_shader_program_signature moui_u32 moui_gl_create_shader_program(moui_string name, moui_u32 vertex_source_count, moui_string *vertex_sources, moui_u32 fragment_source_count, moui_string *fragment_sources)
 moui_gl_create_shader_program_signature;
 
@@ -1050,136 +1307,74 @@ moui_gl_create_shader_object_signature;
 
 moui_default_init_signature
 {
-    WNDCLASS window_class = {0};
-    window_class.lpfnWndProc   = DefWindowProc;
-    window_class.hInstance     = (HINSTANCE) GetModuleHandleA(moui_null);
-    window_class.lpszClassName = "moui init window class";
-    moui_require(RegisterClass(&window_class));
+    moui_platform_init(default_state);
 
-    default_state->win32_gl_init_window = CreateWindowExA(0, window_class.lpszClassName, window_class.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, moui_null, moui_null, window_class.hInstance, moui_null);
-    moui_require(default_state->win32_gl_init_window);
-
-    default_state->win32_gl_init_device_context = GetDC(default_state->win32_gl_init_window);
-    moui_require(default_state->win32_gl_init_device_context);
-
-    moui_win32_gl_window_init(default_state->win32_gl_init_device_context);
-
-    default_state->win32_gl_context = wglCreateContext(default_state->win32_gl_init_device_context);
-    moui_require(default_state->win32_gl_context);
-
-    moui_require(wglMakeCurrent(default_state->win32_gl_init_device_context, default_state->win32_gl_context));
-
-    moui_gl_load(wglChoosePixelFormatARB);
-    moui_gl_load(wglCreateContextAttribsARB);
-
-    if (moui_wglChoosePixelFormatARB && moui_wglCreateContextAttribsARB)
+    if (default_state->base.renderer.gl.is_modern)
     {
-        moui_require(wglMakeCurrent(moui_null, moui_null));
+        moui_gl_required_load(glCreateShader);
+        moui_gl_required_load(glCreateProgram);
+        moui_gl_required_load(glShaderSource);
+        moui_gl_required_load(glCompileShader);
+        moui_gl_required_load(glGetShaderiv);
+        moui_gl_required_load(glAttachShader);            
+        moui_gl_required_load(glBindAttribLocation);            
+        moui_gl_required_load(glLinkProgram);
+        moui_gl_required_load(glGetProgramiv);            
+        moui_gl_required_load(glGetUniformLocation);
+        moui_gl_required_load(glDeleteShader);            
+        moui_gl_required_load(glGenVertexArrays);
+        moui_gl_required_load(glBindVertexArray);
+        moui_gl_required_load(glEnableVertexAttribArray);
+        moui_gl_required_load(glVertexAttribPointer);
+        moui_gl_required_load(glDeleteVertexArrays);
+        moui_gl_required_load(glGenBuffers);
+        moui_gl_required_load(glDeleteBuffers);
+        moui_gl_required_load(glBindBuffer);
+        moui_gl_required_load(glBufferData);
+        moui_gl_required_load(glBufferSubData);        
+        moui_gl_required_load(glUseProgram);
+        moui_gl_required_load(glUniform1i);
+        moui_gl_required_load(glActiveTexture);
 
-        HWND win32_gl_init_window = CreateWindowExA(0, window_class.lpszClassName, window_class.lpszClassName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, moui_null, moui_null, window_class.hInstance, moui_null);
-        moui_require(win32_gl_init_window);
+        moui_string vertex_shader = moui_s(
+            "#version 330\n"
+            "\n"
+            "in vec2 vertex_position;\n"
+            "in vec2 vertex_uv;\n"
+            "in vec4 vertex_color;\n"
+            "\n"
+            "out vec2 fragment_uv;\n"
+            "out vec4 fragment_color;\n"
+            "\n"
+            "void main()\n"
+            "{\n"
+            "    fragment_uv    = vertex_uv;\n"
+            "    fragment_color = vertex_color;\n"
+            "\n"
+            "    gl_Position = vec4(vertex_position, 0, 1);\n"
+            "}\n"
+            );
 
-        HDC win32_gl_init_device_context = GetDC(win32_gl_init_window);
-        moui_require(win32_gl_init_device_context);
+        moui_string fragment_shader = moui_s(
+            "#version 330\n"
+            "\n"                
+            "in vec2 fragment_uv;\n"
+            "in vec4 fragment_color;\n"
+            "\n"
+            "out vec4 out_color;\n"
+            "\n"
+            "uniform sampler2D color_map;\n"
+            "\n"
+            "void main()\n"
+            "{\n"                
+            "    out_color = texture(color_map, fragment_uv) * fragment_color;\n"
+            "}\n"
+            );
 
-        moui_win32_gl_window_init_modern(win32_gl_init_device_context);
-
-        moui_s32 context_attributes[] =
-        {
-            WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
-            WGL_CONTEXT_MINOR_VERSION_ARB, 3,
-            WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-            WGL_CONTEXT_FLAGS_ARB,         WGL_CONTEXT_DEBUG_BIT_ARB,
-            0
-        };
-
-        //if backwards_compatible
-            //{ context_attributes[7] = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB; }
-
-        HGLRC win32_gl_context = moui_wglCreateContextAttribsARB(win32_gl_init_device_context, moui_null, context_attributes);        
-        if (win32_gl_context)
-        {
-            moui_require(wglDeleteContext(default_state->win32_gl_context));
-            moui_require(ReleaseDC(default_state->win32_gl_init_window, default_state->win32_gl_init_device_context));
-            moui_require(DestroyWindow(default_state->win32_gl_init_window));
-
-            default_state->win32_gl_init_window         = win32_gl_init_window;
-            default_state->win32_gl_init_device_context = win32_gl_init_device_context;
-            default_state->win32_gl_context             = win32_gl_context;
-            default_state->base.renderer.gl.is_modern   = moui_true;
-
-            moui_require(wglMakeCurrent(default_state->win32_gl_init_device_context, default_state->win32_gl_context));
-
-            moui_gl_required_load(glCreateShader);
-            moui_gl_required_load(glCreateProgram);
-            moui_gl_required_load(glShaderSource);
-            moui_gl_required_load(glCompileShader);
-            moui_gl_required_load(glGetShaderiv);
-            moui_gl_required_load(glAttachShader);            
-            moui_gl_required_load(glBindAttribLocation);            
-            moui_gl_required_load(glLinkProgram);
-            moui_gl_required_load(glGetProgramiv);            
-            moui_gl_required_load(glGetUniformLocation);
-            moui_gl_required_load(glDeleteShader);            
-            moui_gl_required_load(glGenVertexArrays);
-            moui_gl_required_load(glBindVertexArray);
-            moui_gl_required_load(glEnableVertexAttribArray);
-            moui_gl_required_load(glVertexAttribPointer);
-            moui_gl_required_load(glDeleteVertexArrays);
-            moui_gl_required_load(glGenBuffers);
-            moui_gl_required_load(glDeleteBuffers);
-            moui_gl_required_load(glBindBuffer);
-            moui_gl_required_load(glBufferData);
-            moui_gl_required_load(glBufferSubData);        
-            moui_gl_required_load(glUseProgram);
-            moui_gl_required_load(glUniform1i);
-            moui_gl_required_load(glActiveTexture);
-
-            moui_string vertex_shader = moui_s(
-                "#version 330\n"
-                "\n"
-                "in vec2 vertex_position;\n"
-                "in vec2 vertex_uv;\n"
-                "in vec4 vertex_color;\n"
-                "\n"
-                "out vec2 fragment_uv;\n"
-                "out vec4 fragment_color;\n"
-                "\n"
-                "void main()\n"
-                "{\n"
-                "    fragment_uv    = vertex_uv;\n"
-                "    fragment_color = vertex_color;\n"
-                "\n"
-                "    gl_Position = vec4(vertex_position, 0, 1);\n"
-                "}\n"
-                );
-
-            moui_string fragment_shader = moui_s(
-                "#version 330\n"
-                "\n"                
-                "in vec2 fragment_uv;\n"
-                "in vec4 fragment_color;\n"
-                "\n"
-                "out vec4 out_color;\n"
-                "\n"
-                "uniform sampler2D color_map;\n"
-                "\n"
-                "void main()\n"
-                "{\n"                
-                "    out_color = texture(color_map, fragment_uv) * fragment_color;\n"
-                "}\n"
-                );
-
-            default_state->base.renderer.gl.shader = moui_gl_create_shader_program(moui_s("moui default shader"), 1, &vertex_shader, 1, &fragment_shader);
-            default_state->base.renderer.gl.shader_color_map = moui_glGetUniformLocation(default_state->base.renderer.gl.shader, "color_map");
-            moui_assert(default_state->base.renderer.gl.shader_color_map != -1);
-        }
-        else
-        {
-            moui_require(ReleaseDC(win32_gl_init_window, win32_gl_init_device_context));
-            moui_require(DestroyWindow(win32_gl_init_window));
-        }    
-    }
+        default_state->base.renderer.gl.shader = moui_gl_create_shader_program(moui_s("moui default shader"), 1, &vertex_shader, 1, &fragment_shader);
+        default_state->base.renderer.gl.shader_color_map = moui_glGetUniformLocation(default_state->base.renderer.gl.shader, "color_map");
+        moui_assert(default_state->base.renderer.gl.shader_color_map != -1);
+    }    
     
     {
         moui_u8 white = 255;
@@ -1197,44 +1392,6 @@ moui_default_init_signature
         };
         default_state->base.renderer.line_texture = moui_create_texture(1, 4, line, moui_true, moui_true);
     }
-
-    // enable v-sync
-    moui_gl_load(wglSwapIntervalEXT);
-    if (moui_wglSwapIntervalEXT)
-        moui_wglSwapIntervalEXT(1);
-}
-
-moui_default_window_init_signature
-{
-    moui_assert(default_state->win32_gl_context); // call moui_init first
-    moui_assert(window->device_context);
-
-    if (default_state->base.renderer.gl.is_modern)
-        moui_win32_gl_window_init_modern(window->device_context);
-    else
-        moui_win32_gl_window_init(window->device_context);
-}
-
-moui_default_render_begin_signature
-{
-    moui_assert(default_state->win32_gl_context); // call moui_init first
-    moui_assert(window->device_context);
-    // TODO: assert on moui_default_window_init being called
-
-    if (default_state->win32_gl_current_device_context != window->device_context)
-    {
-        wglMakeCurrent(window->device_context, default_state->win32_gl_context);
-        default_state->win32_gl_current_device_context = window->device_context;
-    }
-}
-
-moui_default_render_end_signature
-{
-    moui_assert(default_state->win32_gl_context); // call moui_init first
-    moui_assert(window->device_context);
-
-    moui_assert(default_state->win32_gl_current_device_context == window->device_context);
-    SwapBuffers(window->device_context);
 }
 
 moui_default_render_prepare_execute_signature
@@ -1479,6 +1636,8 @@ moui_execute_signature
     }
     else
     {
+    #if !__EMSCRIPTEN__
+
         // TODO: sort by layer and texture
         for (moui_s32 layer = renderer->min_layer; layer <= renderer->max_layer; layer++)
         {
@@ -1535,10 +1694,12 @@ moui_execute_signature
                 quad_offset += command.quad_count;
             }
         }
+
+    #endif  
     }
 }
 
-#else !defined moui_custom_state
+#elif !defined moui_custom_state
 
 struct moui_default_state
 {

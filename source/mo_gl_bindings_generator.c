@@ -502,7 +502,7 @@ void parse_and_print_file(mos_string_buffer *buffer, b8 define_function, unique_
         else
         {
             
-            mos_write(buffer, "%.*s_function %.*s;\n", fs(name), fs(name));
+            mos_write(buffer, "mogl_function_%.*s %.*s;\n", fs(name), fs(name));
             
             add_unique(dll_functions, name);
         }
@@ -534,14 +534,11 @@ s32 main(s32 argument_count, cstring arguments[])
     mos_string_buffer buffer = { _builder_buffer, 0, carray_count(_builder_buffer) };
     unique_string_buffer constants = {0};
     unique_string_buffer dll_functions = {0};
-
-    add_unique(&constants, s("fart"));
-    assert(!add_unique(&constants, s("fart")));
     
     // some GL types
     mos_write(&buffer, 
-"#if !defined GL_BINDINGS_H\n"
-"#define GL_BINDINGS_H\n"
+"#if !defined mo_gl_bindings_h\n"
+"#define mo_gl_bindings_h\n"
 "\n"
 "#ifdef __cplusplus\n"
 "extern \"C\" {\n"
@@ -663,99 +660,190 @@ s32 main(s32 argument_count, cstring arguments[])
         mos_write(&buffer, "// file: %s\n", files[i].path);
         
         print_newline(&buffer);
-        parse_and_print_file(&buffer, define_function, &constants, &dll_functions, read_file_result.data);
+        parse_and_print_file(&buffer, define_function, &constants, &dll_functions, read_file_result.data);    
     }
     
     mos_write(&buffer,
+        "\n"
         "#ifdef __cplusplus\n"
         "}\n"
         "#endif\n"
         "\n"
-        "\n#endif\n");
+        "#endif\n");
 
-    mop_write_file(&platform, "source/gl_bindings.h", mos_buffer_to_string(buffer));    
+    mop_write_file(&platform, "source/mo_gl_bindings.h", mos_buffer_to_string(buffer));    
 
-    // gl_win32.t    
-
-    buffer.used_count = 0;    
+    mogl_u32 gl_function_count = dll_functions.used_count;
     
-    // some GL types
-    mos_write(&buffer,
-"#if !defined GL_WI32_BINDINGS_H\n"
-"#define GL_WI32_BINDINGS_H\n"
-"\n"
-"#ifdef __cplusplus\n"
-"extern \"C\" {\n"
-"#endif\n"
-"\n"
-"typedef %.*s HPBUFFERARB;\n"
-"typedef %.*s HPBUFFEREXT;\n"
-"typedef %.*s HGPUNV;\n"
-"typedef %.*s PGPU_DEVICE;\n"
-"typedef %.*s HVIDEOOUTPUTDEVICENV;\n"
-"typedef %.*s HVIDEOINPUTDEVICENV;\n"
-"typedef %.*s HPVIDEODEV;\n"
-"\n"
-"#if !defined(_WIN32) && !defined(WIN32)\n"
-"typedef %.*s HGLRC;\n"
-"\n"
-"%.*s wglGetProcAddress(%.*sname);\n"
-"HGLRC wglCreateContext(HDC device_context);\n"
-"%.*s wglDeleteContext(HGLRC gl_context);\n"
-"%.*s wglMakeCurrent(HDC device_context, HGLRC gl_context);\n"
-"#endif",
-    fs(basic_type_names[basic_type_void_pointer]),
-    fs(basic_type_names[basic_type_void_pointer]),
-    fs(basic_type_names[basic_type_void_pointer]),
-    fs(basic_type_names[basic_type_void_pointer]),
-    fs(basic_type_names[basic_type_void_pointer]),
-    fs(basic_type_names[basic_type_void_pointer]),
-    fs(basic_type_names[basic_type_void_pointer]),
-    fs(basic_type_names[basic_type_void_pointer]),
-    fs(basic_type_names[basic_type_void_pointer]), fs(basic_type_names[basic_type_cstring]),
-    fs(basic_type_names[basic_type_s32]),
-    fs(basic_type_names[basic_type_s32])
-);
-    
-    {                
-        mop_read_file_result read_file_result = mop_read_file(&platform, read_buffer, "source/gl/wglext.h");
-        if (!read_file_result.ok)
-        {
-            printf("couldn't open file %s\n", "gl/wglext.h");
-            return 0;
+    {
+        buffer.used_count = 0;
+        dll_functions.used_count = gl_function_count;
+        
+        // some win32 GL types
+        mos_write(&buffer,
+            "#if !defined mo_gl_win32_bindings_h\n"
+            "#define mo_gl_win32_bindings_h\n"
+            "\n"
+            "#ifdef __cplusplus\n"
+            "extern \"C\" {\n"
+            "#endif\n"
+            "\n"
+            "typedef %.*s HPBUFFERARB;\n"
+            "typedef %.*s HPBUFFEREXT;\n"
+            "typedef %.*s HGPUNV;\n"
+            "typedef %.*s PGPU_DEVICE;\n"
+            "typedef %.*s HVIDEOOUTPUTDEVICENV;\n"
+            "typedef %.*s HVIDEOINPUTDEVICENV;\n"
+            "typedef %.*s HPVIDEODEV;\n"
+            "\n"
+            "#if !defined(_WIN32) && !defined(WIN32)\n"
+            "typedef %.*s HGLRC;\n"
+            "\n"
+            "%.*s wglGetProcAddress(%.*sname);\n"
+            "HGLRC wglCreateContext(HDC device_context);\n"
+            "%.*s wglDeleteContext(HGLRC gl_context);\n"
+            "%.*s wglMakeCurrent(HDC device_context, HGLRC gl_context);\n"
+            "#endif",
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]), fs(basic_type_names[basic_type_cstring]),
+            fs(basic_type_names[basic_type_s32]),
+            fs(basic_type_names[basic_type_s32]));
+        
+        {                
+            mop_read_file_result read_file_result = mop_read_file(&platform, read_buffer, "source/gl/wglext.h");
+            if (!read_file_result.ok)
+            {
+                printf("couldn't open file %s\n", "gl/wglext.h");
+                return 0;
+            }
+
+            read_buffer.base  += read_file_result.data.count;
+            read_buffer.count -= read_file_result.data.count;
+            
+            b8 define_function = false;
+            parse_and_print_file(&buffer, define_function, &constants, &dll_functions, read_file_result.data);
         }
 
-        read_buffer.base  += read_file_result.data.count;
-        read_buffer.count -= read_file_result.data.count;
-        
-        b8 define_function = false;
-        parse_and_print_file(&buffer, define_function, &constants, &dll_functions, read_file_result.data);
+        mos_write(&buffer,
+            "\n"
+            "#ifdef __cplusplus\n"
+            "}\n"
+            "#endif\n"
+            "\n"
+            "#endif\n");
+
+        mos_write(&buffer,
+            "\n"
+            "#if defined mo_gl_win32_bindings_implementation\n"
+            "\n"
+            "void mogl_load_functions()\n"
+            "{\n");            
+
+        for (u32 i = 0; i < dll_functions.used_count; i++)
+        {
+            string name = dll_functions.base[i];
+            mos_write(&buffer, "    %.*s = (mogl_function_%.*s) wglGetProcAddress(\"%.*s\");\n", fs(name), fs(name), fs(name));
+        }
+
+        mos_write(&buffer,
+            "}\n"
+            "\n"
+            "#endif");
+            
+        mop_write_file(&platform, "source/mo_gl_win32_bindings.h", mos_buffer_to_string(buffer));
     }
 
-    mos_write(&buffer,
-        "#ifdef __cplusplus\n"
-        "}\n"
-        "#endif\n"
-        "\n"
-        "\n#endif\n");
+     {
+        buffer.used_count = 0;
+        dll_functions.used_count = gl_function_count;
         
-    mop_write_file(&platform, "source/gl_win32_bindings.h", mos_buffer_to_string(buffer));
-    
-    /*
-    print_newline(&buffer);
-    print_line(&buffer, "func gl_init_functions()");
-    print_scope_open(&buffer);
-    
-    for (u32 i = 0; i < dll_functions.count; i++)mos_are_equal
-    {
-        string function = dll_functions.base[i];
-        print_line(&buffer, "%.*s = wglGetProcAddress(\"%.*s\\0\".base cast(cstring)) cast(%.*s_signature);", fs(function), fs(function), fs(function));
+        // some win32 GL types
+        mos_write(&buffer,
+            "#if !defined mo_gl_win32_bindings_h\n"
+            "#define mo_gl_win32_bindings_h\n"
+            "\n"
+            "#ifdef __cplusplus\n"
+            "extern \"C\" {\n"
+            "#endif\n"
+            "\n"
+            "typedef %.*s HPBUFFERARB;\n"
+            "typedef %.*s HPBUFFEREXT;\n"
+            "typedef %.*s HGPUNV;\n"
+            "typedef %.*s PGPU_DEVICE;\n"
+            "typedef %.*s HVIDEOOUTPUTDEVICENV;\n"
+            "typedef %.*s HVIDEOINPUTDEVICENV;\n"
+            "typedef %.*s HPVIDEODEV;\n"
+            "\n"
+            "#if !defined(_WIN32) && !defined(WIN32)\n"
+            "typedef %.*s HGLRC;\n"
+            "\n"
+            "%.*s wglGetProcAddress(%.*sname);\n"
+            "HGLRC wglCreateContext(HDC device_context);\n"
+            "%.*s wglDeleteContext(HGLRC gl_context);\n"
+            "%.*s wglMakeCurrent(HDC device_context, HGLRC gl_context);\n"
+            "#endif",
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]),
+            fs(basic_type_names[basic_type_void_pointer]), fs(basic_type_names[basic_type_cstring]),
+            fs(basic_type_names[basic_type_s32]),
+            fs(basic_type_names[basic_type_s32]));
+        
+        {                
+            mop_read_file_result read_file_result = mop_read_file(&platform, read_buffer, "source/gl/wglext.h");
+            if (!read_file_result.ok)
+            {
+                printf("couldn't open file %s\n", "gl/wglext.h");
+                return 0;
+            }
+
+            read_buffer.base  += read_file_result.data.count;
+            read_buffer.count -= read_file_result.data.count;
+            
+            b8 define_function = false;
+            parse_and_print_file(&buffer, define_function, &constants, &dll_functions, read_file_result.data);
+        }
+
+        mos_write(&buffer,
+            "\n"
+            "#ifdef __cplusplus\n"
+            "}\n"
+            "#endif\n"
+            "\n"
+            "#endif\n");
+
+        mos_write(&buffer,
+            "\n"
+            "#if defined mo_gl_win32_bindings_implementation\n"
+            "\n"
+            "void mogl_load_functions()\n"
+            "{\n");            
+
+        for (u32 i = 0; i < dll_functions.used_count; i++)
+        {
+            string name = dll_functions.base[i];
+            mos_write(&buffer, "    %.*s = (mogl_function_%.*s) wglGetProcAddress(\"%.*s\");\n", fs(name), fs(name), fs(name));
+        }
+
+        mos_write(&buffer,
+            "}\n"
+            "\n"
+            "#endif");
+            
+        mop_write_file(&platform, "source/mo_gl_win32_bindings.h", mos_buffer_to_string(buffer));
     }
-    
-    print_scope_close(&buffer);
-    
-    platform_write_entire_file("modules/gl_win32.t", buffer.memory.array);
-    */
 
     return 0;
 }

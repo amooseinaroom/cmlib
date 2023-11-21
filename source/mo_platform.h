@@ -8,21 +8,6 @@
 extern "C" {
 #endif
 
-#if !defined mop_assert
-#if defined mop_debug
-// TODO: create proper message box
-#include <stdio.h>
-#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); __debugbreak(); }
-#else
-#define mop_assert(x)
-#endif
-#endif
-
-#if !defined mop_require
-#include <stdio.h>
-#define mop_require(x) if (!(x)) { printf("%s,%s,%u: Requirement Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); int error = GetLastError(); if (error) printf("   GetLastError() = %i\n", error); __debugbreak(); }
-#endif
-
 #define mop_cases_complete(value) default: mop_assert(0)
 
 typedef unsigned char      mop_u8;
@@ -168,10 +153,27 @@ mop_write_file_signature;
 #if defined mop_implementation
 #undef mop_implementation
 
+#if defined(_WIN32) || defined(WIN32)
+
 #include <windows.h>
 
 #pragma comment(lib, "gdi32")
 #pragma comment(lib, "user32")
+
+#if !defined mop_assert
+#if defined mop_debug
+// TODO: create proper message box
+#include <stdio.h>
+#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); __debugbreak(); }
+#else
+#define mop_assert(x)
+#endif
+#endif
+
+#if !defined mop_require
+#include <stdio.h>
+#define mop_require(x) if (!(x)) { printf("%s,%s,%u: Requirement Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); int error = GetLastError(); if (error) printf("   GetLastError() = %i\n", error); __debugbreak(); }
+#endif
 
 enum mop_character_symbol
 {
@@ -210,7 +212,6 @@ struct mop_platform
 
     mop_b8 do_quit;
 
-
     struct
     {
         POINT cursor;
@@ -238,6 +239,7 @@ LRESULT CALLBACK mop_win32_window_callback(HWND window_handle, UINT msg, WPARAM 
 
     return DefWindowProc(window_handle, msg, w_param, l_param);
 }
+
 
 mop_init_signature
 {
@@ -303,26 +305,6 @@ void mop_win32_add_character(mop_platform *platform, mop_u32 code, mop_b8 is_sym
     }
 }
 
-void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
-{
-    mop_assert(key < mop_carray_count(platform->keys));
-
-    // mop_assert(platform->keys[key].is_active != is_active);
-
-    if (platform->keys[key].half_transition_count == 63)
-        platform->keys[key].half_transition_overflow = mop_true;
-
-    platform->keys[key].half_transition_count += 1;
-    platform->keys[key].is_active = is_active;
-}
-
-void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
-{
-    mop_assert(key < mop_carray_count(platform->keys));
-
-    if (platform->keys[key].is_active != is_active)
-        mop_key_event_update(platform, key, is_active);
-}
 
 mop_handle_messages_signature
 {
@@ -497,5 +479,100 @@ mop_write_file_signature
 
     return mop_true;
 }
+
+#elif __EMSCRIPTEN__
+
+#if !defined mop_assert
+#if defined mop_debug
+// TODO: create proper message box
+#include <stdio.h>
+#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); }
+#else
+#define mop_assert(x)
+#endif
+#endif
+
+#if !defined mop_require
+#include <stdio.h>
+#define mop_require(x) if (!(x)) { printf("%s,%s,%u: Requirement Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); }
+#endif
+
+enum mop_character_symbol
+{
+    mop_character_symbol_backspace,
+    mop_character_symbol_escape,
+    mop_character_symbol_delete,
+    mop_character_symbol_newline,
+};
+
+enum mop_key
+{
+    mop_key_return,
+    mop_key_backspace,
+    mop_key_escape,
+    mop_key_delete,
+    mop_key_mouse_left,
+    mop_key_mouse_middle,
+    mop_key_mouse_right,
+};
+
+struct mop_platform
+{
+    mop_character characters[32];
+    mop_u32 character_count;
+    mop_u32 missed_character_count;
+
+    mop_key_state keys[256];
+
+    mop_point previous_mouse_position;
+    mop_point mouse_position;
+
+    mop_u64 realtime_counter_ticks_per_second;
+    mop_u64 last_realtime_counter;
+
+    mop_f32 delta_seconds;
+
+    mop_b8 do_quit;
+
+    struct
+    {
+        u8 unused;
+    } emscripten;
+};
+
+struct mop_window
+{
+    u8 unused;
+    //HWND handle;
+    //HDC  device_context;
+};
+
+#else
+
+#error mop_implementation not implemented for current platform
+
+#endif
+
+void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+{
+    mop_assert(key < mop_carray_count(platform->keys));
+
+    // mop_assert(platform->keys[key].is_active != is_active);
+
+    if (platform->keys[key].half_transition_count == 63)
+        platform->keys[key].half_transition_overflow = mop_true;
+
+    platform->keys[key].half_transition_count += 1;
+    platform->keys[key].is_active = is_active;
+}
+
+void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+{
+    mop_assert(key < mop_carray_count(platform->keys));
+
+    if (platform->keys[key].is_active != is_active)
+        mop_key_event_update(platform, key, is_active);
+}
+
 
 #endif

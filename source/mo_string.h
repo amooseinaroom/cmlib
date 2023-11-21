@@ -373,6 +373,8 @@ mos_write_signature
     return result;
 }
 
+#if defined(_WIN32) || defined(WIN32)
+
 mos_write_va_signature
 {
     mos_s32 count = vsprintf_s((char *) buffer->base + buffer->used_count, buffer->total_count - buffer->used_count, format, arguments);
@@ -382,5 +384,19 @@ mos_write_va_signature
 
     return result;
 }
+
+#elif __EMSCRIPTEN__
+
+mos_write_va_signature
+{
+    mos_s32 count = vsnprintf((char *) buffer->base + buffer->used_count, buffer->total_count - buffer->used_count, format, arguments);
+    mos_assert(count >= 0);
+    mos_string result = { buffer->base + buffer->used_count, (mos_usize) count };
+    buffer->used_count += count;
+
+    return result;
+}
+
+#endif
 
 #endif
