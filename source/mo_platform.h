@@ -138,7 +138,7 @@ struct mop_platform;
 #define mop_init_signature void mop_init(mop_platform *platform)
 mop_init_signature;
 
-#define mop_window_init_signature void mop_window_init(mop_platform *platform, mop_window *window, mop_cstring title)
+#define mop_window_init_signature void mop_window_init(mop_platform *platform, mop_window *window, mop_cstring title, mop_s32 width, mop_s32 height)
 mop_window_init_signature;
 
 #define mop_window_get_info_signature mop_window_info mop_window_get_info(mop_platform *platform, mop_window *window)
@@ -258,7 +258,14 @@ mop_window_init_signature
 {
     mop_assert(!window->handle);
 
-    window->handle = CreateWindowExA(0, mop_win32_window_class_name, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, mop_null, mop_null, (HINSTANCE) GetModuleHandleA(mop_null), mop_null);
+    RECT client_rect;
+    client_rect.left = 0;
+    client_rect.right = width;
+    client_rect.top = 0;
+    client_rect.bottom = height;
+    AdjustWindowRect(&client_rect, WS_OVERLAPPEDWINDOW, false);
+
+    window->handle = CreateWindowExA(0, mop_win32_window_class_name, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, client_rect.right - client_rect.left, client_rect.bottom - client_rect.top, mop_null, mop_null, (HINSTANCE) GetModuleHandleA(mop_null), mop_null);
     mop_require(window->handle);
 
     ShowWindow(window->handle, SW_SHOW);
