@@ -91,13 +91,13 @@ mogl_window_init_signature;
 #if defined mogl_implementation
 #undef mogl_implementation
 
-#include "mogl_bindings.h"
+#include "mo_gl_bindings.h"
 
-#ifdef defined(_WIN32) || defined(WIN32)
+#if defined(_WIN32) || defined(WIN32)
 
 #include <windows.h>
 
-#include "mogl_win32_bindings.h"
+#include "mo_gl_win32_bindings.h"
 
 #pragma comment(lib, "gdi32")
 #pragma comment(lib, "user32")
@@ -154,7 +154,7 @@ void mogl_win32_modern_window_init(HDC device_context)
 }
 
 mogl_window_init_signature
-{    
+{
     mogl_assert(state->gl_context);
 
     if (state->is_modern_context)
@@ -190,7 +190,7 @@ mogl_init_signature
     //wglSwapIntervalEXT(1);
 }
 
-#elif __EMSCRIPTEN__
+#elif defined(__EMSCRIPTEN__)
 
 //#include <EGL/egl.h>
 
@@ -200,8 +200,8 @@ struct mogl_state
 {
     EGLDisplay display;
     EGLConfig  config;
-    EGLSurface surface;    
-    EGLContext gl_context;    
+    EGLSurface surface;
+    EGLContext gl_context;
 };
 
 struct mogl_platform_window
@@ -211,7 +211,7 @@ struct mogl_platform_window
 
 struct mogl_window
 {
-    
+
     EGLSurface surface;
 };
 
@@ -221,7 +221,7 @@ mogl_init_signature
     mogl_require(state->display != EGL_NO_DISPLAY);
 
     mogl_require(eglInitialize(state->display, mogl_null, mogl_null));
-            
+
     {
         mogl_s32 attributes[] =
         {
@@ -236,19 +236,19 @@ mogl_init_signature
         };
 
         mogl_s32 config_count;
-        mogl_require(eglGetConfigs(display, mogl_null, 0, &config_count));        
-        mogl_require(eglChooseConfig(display, attributes, &state->config, 1, &config_count));   
+        mogl_require(eglGetConfigs(display, mogl_null, 0, &config_count));
+        mogl_require(eglChooseConfig(display, attributes, &state->config, 1, &config_count));
     }
-    
+
     state->init_surface = eglCreateWindowSurface(state->display, state->config, 0, mogl_null);
-    mogl_require(state->init_surface != EGL_NO_SURFACE); 
-    
+    mogl_require(state->init_surface != EGL_NO_SURFACE);
+
     {
-        mogl_s32 attributes[] = 
+        mogl_s32 attributes[] =
         {
-            EGL_CONTEXT_CLIENT_VERSION,       2,            
+            EGL_CONTEXT_CLIENT_VERSION,       2,
             //EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
-            //EGL_CONTEXT_OPENGL_DEBUG,        EGL_TRUE,            
+            //EGL_CONTEXT_OPENGL_DEBUG,        EGL_TRUE,
             EGL_NONE,
             EGL_NONE
         };
@@ -263,7 +263,7 @@ mogl_init_signature
 mogl_window_init_signature
 {
     window->surface = eglCreateWindowSurface(state->display, state->config, 0, mogl_null);
-    mogl_require(window->surface != EGL_NO_SURFACE);    
+    mogl_require(window->surface != EGL_NO_SURFACE);
 
     mogl_require(eglMakeCurrent(state->display, window->surface, window->surface, state->gl_context));
 }

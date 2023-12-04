@@ -144,6 +144,12 @@ mop_read_file_signature;
 #define mop_write_file_signature mop_b8 mop_write_file(mop_platform *platform, mop_cstring path, mop_u8_array data)
 mop_write_file_signature;
 
+#define mop_key_event_update_signature void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_event_update_signature;
+
+#define mop_key_poll_update_signature void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_poll_update_signature;
+
 #ifdef __cplusplus
 }
 #endif
@@ -239,7 +245,6 @@ LRESULT CALLBACK mop_win32_window_callback(HWND window_handle, UINT msg, WPARAM 
 
     return DefWindowProc(window_handle, msg, w_param, l_param);
 }
-
 
 mop_init_signature
 {
@@ -456,6 +461,8 @@ mop_read_file_signature
         byte_count -= read_count;
     }
 
+    CloseHandle(handle);
+
     return result;
 }
 
@@ -483,6 +490,8 @@ mop_write_file_signature
         data.base  += write_count;
         data.count -= write_count;
     }
+
+    CloseHandle(handle);
 
     return mop_true;
 }
@@ -560,7 +569,7 @@ struct mop_window
 
 #endif
 
-void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_event_update_signature
 {
     mop_assert(key < mop_carray_count(platform->keys));
 
@@ -573,13 +582,12 @@ void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
     platform->keys[key].is_active = is_active;
 }
 
-void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_poll_update_signature
 {
     mop_assert(key < mop_carray_count(platform->keys));
 
     if (platform->keys[key].is_active != is_active)
         mop_key_event_update(platform, key, is_active);
 }
-
 
 #endif
