@@ -116,6 +116,9 @@ mos_parse_s64_ex_signature;
 #define mos_parse_s64_signature mos_b8 mos_parse_s64(mos_s64 *result, mos_string *iterator)
 mos_parse_s64_signature;
 
+#define mos_buffer_from_memory_signature mos_string_buffer mos_buffer_from_memory(u8 *base, usize count)
+mos_buffer_from_memory_signature;
+
 #define mos_buffer_to_string_signature mos_string mos_buffer_to_string(mos_string_buffer buffer)
 mos_buffer_to_string_signature;
 
@@ -229,7 +232,7 @@ mos_skip_name_signature
     mos_u8 digit = iterator->base[0];
     if ('0' <= digit && digit <= '9')
         return mos_string_empty;
-    
+
     mos_string name = mos_skip_until_set_or_end(iterator, blacklist);
     return name;
 }
@@ -253,7 +256,7 @@ mos_try_skip_signature
 mos_skip_signature
 {
     mos_b8 ok = mos_try_skip(iterator, pattern);
-    mos_assert(ok);    
+    mos_assert(ok);
 }
 
 mos_skip_until_pattern_or_end_signature
@@ -354,6 +357,15 @@ mos_parse_s64_ex_signature
     }
 
     return ok;
+}
+
+mos_buffer_from_memory_signature
+{
+    mos_string_buffer buffer = {0};
+    buffer.base        = base;
+    buffer.total_count = count;
+
+    return buffer;
 }
 
 mos_buffer_to_string_signature

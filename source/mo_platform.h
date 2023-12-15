@@ -144,11 +144,11 @@ mop_read_file_signature;
 #define mop_write_file_signature mop_b8 mop_write_file(mop_platform *platform, mop_cstring path, mop_u8_array data)
 mop_write_file_signature;
 
-#define mop_key_event_update_signature void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
-mop_key_event_update_signature;
+#define mop_key_was_pressed_signature mop_b8 mop_key_was_pressed(mop_platform *platform, mop_u32 key)
+mop_key_was_pressed_signature;
 
-#define mop_key_poll_update_signature void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
-mop_key_poll_update_signature;
+#define mop_key_was_released_signature mop_b8 mop_key_was_released(mop_platform *platform, mop_u32 key)
+mop_key_was_released_signature;
 
 #ifdef __cplusplus
 }
@@ -158,6 +158,12 @@ mop_key_poll_update_signature;
 
 #if defined mop_implementation
 #undef mop_implementation
+
+#define mop_key_event_update_signature void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_event_update_signature;
+
+#define mop_key_poll_update_signature void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_poll_update_signature;
 
 #if defined(_WIN32) || defined(WIN32)
 
@@ -198,6 +204,8 @@ enum mop_key
     mop_key_mouse_left = VK_LBUTTON,
     mop_key_mouse_middle = VK_MBUTTON,
     mop_key_mouse_right = VK_RBUTTON,
+    mop_key_control = VK_CONTROL,
+    mop_key_f0 = VK_F1 - 1,
 };
 
 struct mop_platform
@@ -588,6 +596,22 @@ mop_key_poll_update_signature
 
     if (platform->keys[key].is_active != is_active)
         mop_key_event_update(platform, key, is_active);
+}
+
+mop_key_was_pressed_signature
+{
+    mop_assert(key < mop_carray_count(platform->keys));
+    mop_key_state state = platform->keys[key];
+
+    return state.half_transition_overflow || (state.half_transition_count >= 2 - state.is_active);
+}
+
+mop_key_was_released_signature
+{
+    mop_assert(key < mop_carray_count(platform->keys));
+    mop_key_state state = platform->keys[key];
+
+    return state.half_transition_overflow || (state.half_transition_count >= 1 + state.is_active);
 }
 
 #endif
