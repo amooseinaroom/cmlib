@@ -69,6 +69,10 @@ array_type(u8_array, u8);
 #define moui_u8_array_type u8_array
 #define moma_u8_array_type u8_array
 
+#define box2 moui_box2
+#define vec2 moui_vec2
+#define rgba moui_rgba
+
 typedef u8_array string;
 
 array_type(string_array, string);
@@ -108,7 +112,7 @@ copy_signature;
 
 copy_signature
 {
-    if (to >= from)
+    if (to <= from)
     {
         for (usize i = 0; i < byte_count; i++)
             to[i] = from[i];

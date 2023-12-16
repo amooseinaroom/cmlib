@@ -60,8 +60,10 @@ typedef moma_u8_array moma_string;
 
 #ifdef __cplusplus
 #define moma_struct_literal(name)
+#define moma_aling_of(type) alignof(type)
 #else
 #define moma_struct_literal(name) (name)
+#define moma_aling_of(type) 8
 #endif
 
 #define moma_s(static_string) moma_struct_literal(string) { static_string, moma_carray_count(static_string) - 1 }
@@ -69,22 +71,12 @@ typedef moma_u8_array moma_string;
 
 const moma_string moma_string_empty = {0};
 
-struct moma_platform;
-typedef struct moma_platform moma_platform;
-
-struct moma_window;
-typedef struct moma_window moma_window;
-
 typedef struct
 {
     moma_u8    *base;
     moma_usize used_count;
     moma_usize count;
 } moma_arena;
-
-#if !defined moma_aling_of
-#define moma_aling_of(type) 8
-#endif
 
 #define moma_allocate_item(arena, type)         ((type *) moma_allocate_bytes(arena, sizeof(type), moma_aling_of(type)))
 #define moma_allocate_array(arena, type, count) ((type *) moma_allocate_bytes(arena, sizeof(type) * (count), moma_aling_of(type)))
@@ -95,6 +87,16 @@ moma_allocate_bytes_signature;
 
 #define moma_reset_signature void moma_reset(moma_arena *arena, moma_u8 *base)
 moma_reset_signature;
+
+#if defined mop_h
+
+#define moma_create_signature void moma_create(moma_arena *arena, mop_platform *platform, moma_usize count)
+moma_create_signature;
+
+#define moma_destroy_signature void moma_destroy(moma_arena *arena, mop_platform *platform)
+moma_destroy_signature;
+
+#endif
 
 #ifdef __cplusplus
 }
@@ -130,5 +132,24 @@ moma_reset_signature
     moma_assert(new_used_count <= arena->count);
     arena->used_count = new_used_count;
 }
+
+#if defined mop_h
+
+moma_create_signature
+{
+    moma_assert(!arena->base);
+
+    mop_u8_array data = mop_allocate(platform, count);
+    arena->base = data.base;
+    arena->used_count = 0;
+    arena->count = data.count;
+}
+
+moma_destroy_signature
+{
+    mop_free(platform, arena->base);
+}
+
+#endif
 
 #endif

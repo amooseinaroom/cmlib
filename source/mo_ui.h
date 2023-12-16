@@ -61,6 +61,12 @@ typedef char * moui_cstring;
 const moui_b8 moui_false = 0;
 const moui_b8 moui_true  = 1;
 
+const union
+{
+    moui_u32 encoding;
+    moui_f32 value;
+} moui_f32_infinite = { 0x7f800000 };
+
 #define moui_carray_count(static_array) (sizeof(static_array) / sizeof(*(static_array)))
 
 #if !defined moui_u8_array_type
@@ -247,6 +253,15 @@ typedef struct
     moui_texture texture;
 } moui_atlas;
 
+typedef struct
+{
+    moui_box2 previous_scissor_box;
+    moui_box2 begin_used_box;
+    moui_vec2 alignment_point;
+    moui_vec2 alignment;
+    moui_u32  quad_offset;
+} moui_aligned_state;
+
 typedef enum
 {
     moui_default_atlas_item_type_white,
@@ -390,6 +405,13 @@ moui_scissor_box_signature;
 #define moui_scissor_signature moui_b8 moui_scissor(moui_state *state, moui_box2 *box, moui_box2 *texture_box)
 moui_scissor_signature;
 
+// TODO: make aligned box respect scissor box
+#define moui_aligned_box_begin_signature moui_aligned_state moui_aligned_box_begin(moui_state *state, moui_vec2 alignment_point, moui_vec2 alignment)
+moui_aligned_box_begin_signature;
+
+#define moui_aligned_box_end_signature moui_box2 moui_aligned_box_end(moui_state *state, moui_aligned_state aligned_state)
+moui_aligned_box_end_signature;
+
 #define moui_used_box_begin_signature moui_box2 moui_used_box_begin(moui_state *state)
 moui_used_box_begin_signature;
 
@@ -505,6 +527,9 @@ moui_f32_min_signature;
 #define moui_f32_max_signature moui_f32 moui_f32_max(moui_f32 a, moui_f32 b)
 moui_f32_max_signature;
 
+#define moui_box2_size_signature moui_vec2 moui_box2_size(moui_box2 box)
+moui_box2_size_signature;
+
 #define moui_box2_merge_signature moui_box2 moui_box2_merge(moui_box2 a, moui_box2 b)
 moui_box2_merge_signature;
 
@@ -533,7 +558,7 @@ moui_gl_load_font_signature;
 
 #if defined(mop_h) && defined(moma_h)
 
-#define moui_load_font_file_signature moui_simple_font moui_load_font_file(mop_platform *platform, moma_arena *arena, moui_cstring path, moui_s32 texture_width, moui_s32 texture_height, moui_s32 height, moui_u32 first_character, moui_u32 character_count)
+#define moui_load_font_file_signature moui_simple_font moui_load_font_file(mop_platform *platform, moma_arena *arena, moui_string path, moui_s32 texture_width, moui_s32 texture_height, moui_s32 height, moui_u32 first_character, moui_u32 character_count)
 moui_load_font_file_signature;
 
 #endif
@@ -805,7 +830,7 @@ struct moui_default_state
     HWND    win32_gl_init_window;
     HDC     win32_gl_init_device_context;
     HGLRC   win32_gl_context;
-    HDC     win32_gl_current_device_context;    
+    HDC     win32_gl_current_device_context;
 };
 
 #define moui_gl_check(x) x; moui_gl_error(# x, __FUNCTION__, __LINE__)
@@ -926,7 +951,7 @@ moui_glUseProgram_function moui_glUseProgram;
 
 typedef void (*moui_glUniform1i_function)(GLint location, GLint v0);
 moui_glUniform1i_function moui_glUniform1i;
-      
+
 typedef void (*moui_glActiveTexture_function)(GLenum texture);
 moui_glActiveTexture_function moui_glActiveTexture;
 
@@ -1096,7 +1121,7 @@ moui_default_init_signature
         //if backwards_compatible
             //{ context_attributes[7] = WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB; }
 
-        HGLRC win32_gl_context = moui_wglCreateContextAttribsARB(win32_gl_init_device_context, moui_null, context_attributes);        
+        HGLRC win32_gl_context = moui_wglCreateContextAttribsARB(win32_gl_init_device_context, moui_null, context_attributes);
         if (win32_gl_context)
         {
             moui_require(wglDeleteContext(default_state->win32_gl_context));
@@ -1115,12 +1140,12 @@ moui_default_init_signature
             moui_gl_required_load(glShaderSource);
             moui_gl_required_load(glCompileShader);
             moui_gl_required_load(glGetShaderiv);
-            moui_gl_required_load(glAttachShader);            
-            moui_gl_required_load(glBindAttribLocation);            
+            moui_gl_required_load(glAttachShader);
+            moui_gl_required_load(glBindAttribLocation);
             moui_gl_required_load(glLinkProgram);
-            moui_gl_required_load(glGetProgramiv);            
+            moui_gl_required_load(glGetProgramiv);
             moui_gl_required_load(glGetUniformLocation);
-            moui_gl_required_load(glDeleteShader);            
+            moui_gl_required_load(glDeleteShader);
             moui_gl_required_load(glGenVertexArrays);
             moui_gl_required_load(glBindVertexArray);
             moui_gl_required_load(glEnableVertexAttribArray);
@@ -1130,7 +1155,7 @@ moui_default_init_signature
             moui_gl_required_load(glDeleteBuffers);
             moui_gl_required_load(glBindBuffer);
             moui_gl_required_load(glBufferData);
-            moui_gl_required_load(glBufferSubData);        
+            moui_gl_required_load(glBufferSubData);
             moui_gl_required_load(glUseProgram);
             moui_gl_required_load(glUniform1i);
             moui_gl_required_load(glActiveTexture);
@@ -1156,7 +1181,7 @@ moui_default_init_signature
 
             moui_string fragment_shader = moui_s(
                 "#version 330\n"
-                "\n"                
+                "\n"
                 "in vec2 fragment_uv;\n"
                 "in vec4 fragment_color;\n"
                 "\n"
@@ -1165,7 +1190,7 @@ moui_default_init_signature
                 "uniform sampler2D color_map;\n"
                 "\n"
                 "void main()\n"
-                "{\n"                
+                "{\n"
                 "    out_color = texture(color_map, fragment_uv) * fragment_color;\n"
                 "}\n"
                 );
@@ -1178,9 +1203,9 @@ moui_default_init_signature
         {
             moui_require(ReleaseDC(win32_gl_init_window, win32_gl_init_device_context));
             moui_require(DestroyWindow(win32_gl_init_window));
-        }    
+        }
     }
-    
+
     {
         moui_u8 white = 255;
         default_state->base.renderer.white_texture = moui_create_texture(1, 1, &white, moui_true, moui_false);
@@ -1281,15 +1306,15 @@ moui_gl_create_shader_object_signature
 }
 
 moui_gl_create_shader_program_signature
-{   
+{
     moui_u32 vertex_shader   = moui_gl_create_shader_object(name, moui_false, vertex_source_count,   vertex_sources);
     moui_u32 fragment_shader = moui_gl_create_shader_object(name, moui_true,  fragment_source_count, fragment_sources);
-    
+
     moui_u32 program = moui_glCreateProgram();
     moui_glAttachShader(program, vertex_shader);
     moui_glAttachShader(program, fragment_shader);
 
-    {                    
+    {
         moui_glBindAttribLocation(program, 0, "vertex_position");
         moui_glBindAttribLocation(program, 1, "vertex_uv");
         moui_glBindAttribLocation(program, 2, "vertex_color");
@@ -1311,19 +1336,19 @@ void moui_gl_resize_vertex_buffer(moui_gl_buffer *buffer, moui_u32 vertex_count,
 {
     buffer->used_count = vertex_count;
     moui_u32 new_total_count = moui_u32_max(buffer->total_count, 2 * buffer->used_count);
-        
+
     if (new_total_count > buffer->total_count)
-    {                
+    {
         buffer->total_count = new_total_count;
 
         if (buffer->array_buffer_object)
-        {   
+        {
             moui_assert(buffer->array_object);
             moui_glDeleteVertexArrays(1, &buffer->array_object);
             moui_glDeleteBuffers(1, &buffer->array_buffer_object);
         }
-            
-        moui_glGenVertexArrays(1, &buffer->array_object);       
+
+        moui_glGenVertexArrays(1, &buffer->array_object);
         moui_require(buffer->array_object);
         moui_glBindVertexArray(buffer->array_object);
 
@@ -1345,7 +1370,7 @@ void moui_gl_resize_vertex_buffer(moui_gl_buffer *buffer, moui_u32 vertex_count,
         // vec4 color
         moui_glEnableVertexAttribArray(2);
         moui_glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(moui_vertex), (void *) byte_offset);
-        byte_offset += sizeof(moui_rgba);    
+        byte_offset += sizeof(moui_rgba);
 
         moui_glBufferData(GL_ARRAY_BUFFER, buffer->total_count * sizeof(moui_vertex), moui_null, GL_DYNAMIC_DRAW);
         moui_glBufferSubData(GL_ARRAY_BUFFER, 0, buffer->used_count * sizeof(moui_vertex), vertices);
@@ -1357,10 +1382,10 @@ void moui_gl_resize_vertex_buffer(moui_gl_buffer *buffer, moui_u32 vertex_count,
     else if (buffer->used_count)
     {
         moui_assert(buffer->array_buffer_object);
-        moui_glBindBuffer(GL_ARRAY_BUFFER, buffer->array_buffer_object);        
-        
+        moui_glBindBuffer(GL_ARRAY_BUFFER, buffer->array_buffer_object);
+
         moui_glBufferSubData(GL_ARRAY_BUFFER, 0, buffer->used_count * sizeof(moui_vertex), vertices);
-        
+
         moui_glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 }
@@ -1370,7 +1395,7 @@ moui_execute_signature
 #if defined moui_debug
     moui_assert(state->debug_is_in_frame);
     state->debug_is_in_frame = moui_false;
-#endif    
+#endif
 
     moui_renderer *renderer = &state->renderer;
 
@@ -1380,7 +1405,7 @@ moui_execute_signature
     if ((renderer->command_request_count > renderer->command_count) || (renderer->quad_request_count > renderer->quad_count) || (renderer->texture_request_count > renderer->texture_count))
         return;
 
-    moui_gl_check(glEnable(GL_BLEND));    
+    moui_gl_check(glEnable(GL_BLEND));
     moui_gl_check(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
 
     moui_u32 command_count = renderer->command_request_count;
@@ -1389,7 +1414,7 @@ moui_execute_signature
 
     if (state->renderer.gl.is_modern)
     {
-        renderer->vertex_request_count = moui_u32_max(renderer->vertex_request_count, renderer->quad_request_count * 6);    
+        renderer->vertex_request_count = moui_u32_max(renderer->vertex_request_count, renderer->quad_request_count * 6);
         if (renderer->quad_request_count * 6 > renderer->vertex_count)
             return;
 
@@ -1397,18 +1422,18 @@ moui_execute_signature
         moui_u32 sorted_vertex_count = 0;
 
         for (moui_s32 layer = renderer->min_layer; layer <= renderer->max_layer; layer++)
-        {                        
+        {
             for (moui_s32 texture_index = 0; texture_index < renderer->texture_count; texture_index++)
-            {        
-                moui_u32 quad_offset = 0;    
+            {
+                moui_u32 quad_offset = 0;
 
                 for (moui_u32 command_index = 0; command_index < command_count; command_index++)
                 {
-                    moui_command command = renderer->commands[command_index];                    
-                    if ((command.layer != layer) || (command.texture_index != texture_index))                                    
+                    moui_command command = renderer->commands[command_index];
+                    if ((command.layer != layer) || (command.texture_index != texture_index))
                     {
                         quad_offset += command.quad_count;
-                        continue;                    
+                        continue;
                     }
 
                     for (moui_u32 quad_index = 0; quad_index < command.quad_count; quad_index++)
@@ -1422,42 +1447,42 @@ moui_execute_signature
 
                         vertices[3] = vertices[0];
                         vertices[4] = vertices[2];
-                        vertices[5] = renderer->quads[quad_offset + quad_index].vertices[3];                     
+                        vertices[5] = renderer->quads[quad_offset + quad_index].vertices[3];
                     }
 
                     quad_offset += command.quad_count;
                 }
-            }        
+            }
         }
 
         // transform from ui to clip space
         for (moui_s32 vertex_index = 0; vertex_index < sorted_vertex_count; vertex_index++)
-        {            
+        {
             sorted_vertices[vertex_index].position.x = sorted_vertices[vertex_index].position.x * gl_viewport_scale.x - 1;
             sorted_vertices[vertex_index].position.y = sorted_vertices[vertex_index].position.y * gl_viewport_scale.y - 1;
         }
 
         moui_gl_resize_vertex_buffer(&state->renderer.gl.vertex_buffer, sorted_vertex_count, sorted_vertices);
 
-        moui_glUseProgram(state->renderer.gl.shader);    
-        
+        moui_glUseProgram(state->renderer.gl.shader);
+
         moui_glUniform1i(state->renderer.gl.shader_color_map, 0);
         moui_glActiveTexture(GL_TEXTURE0);
 
-        moui_glBindVertexArray(state->renderer.gl.vertex_buffer.array_object);        
+        moui_glBindVertexArray(state->renderer.gl.vertex_buffer.array_object);
 
         {
             moui_u32 vertex_offset = 0;
 
             for (moui_s32 layer = renderer->min_layer; layer <= renderer->max_layer; layer++)
-            {                            
+            {
                 for (moui_s32 texture_index = 0; texture_index < renderer->texture_count; texture_index++)
-                {            
+                {
                     for (moui_u32 command_index = 0; command_index < command_count; command_index++)
                     {
-                        moui_command command = renderer->commands[command_index];                    
-                        if ((command.layer != layer) || (command.texture_index != texture_index))                                                            
-                            continue;                        
+                        moui_command command = renderer->commands[command_index];
+                        if ((command.layer != layer) || (command.texture_index != texture_index))
+                            continue;
 
                         moui_u32 texture_handle = (moui_u32) (moui_usize) renderer->textures[command.texture_index].handle;
                         glBindTexture(GL_TEXTURE_2D, texture_handle);
@@ -1641,6 +1666,49 @@ moui_scissor_signature
     return ok;
 }
 
+moui_aligned_box_begin_signature
+{
+    moui_aligned_state aligned_state = moui_sl(moui_aligned_state) {0};
+    aligned_state.alignment_point      = alignment_point;
+    aligned_state.alignment            = alignment;
+    aligned_state.quad_offset          = state->renderer.quad_request_count;
+    aligned_state.begin_used_box       = moui_used_box_begin(state);
+    moui_box2 scissor_box;
+    scissor_box.min = moui_sl(moui_vec2) { -moui_f32_infinite.value, -moui_f32_infinite.value };
+    scissor_box.max = moui_sl(moui_vec2) {  moui_f32_infinite.value,  moui_f32_infinite.value };
+    aligned_state.previous_scissor_box = moui_set_scissor_box(state, scissor_box);
+
+    return aligned_state;
+}
+
+moui_aligned_box_end_signature
+{
+    moui_box2 used_box = moui_used_box_end(state, aligned_state.begin_used_box);
+    moui_u32 quad_count = moui_u32_min(state->renderer.quad_count, state->renderer.quad_request_count);
+    moui_set_scissor_box(state, aligned_state.previous_scissor_box);
+
+    moui_vec2 box_size = moui_box2_size(used_box);
+    moui_vec2 offset = moui_sl(moui_vec2) { aligned_state.alignment_point.x - used_box.min.x + box_size.x * -aligned_state.alignment.x, aligned_state.alignment_point.y - used_box.min.y + box_size.y * -aligned_state.alignment.y };
+
+    // TODO: properly scissor quads
+    for (moui_u32 quad_index = aligned_state.quad_offset; quad_index < quad_count; quad_index++)
+    {
+        moui_quad *quad = &state->renderer.quads[quad_index];
+        for (moui_u32 vertex_index = 0; vertex_index < moui_carray_count(quad->vertices); vertex_index++)
+        {
+            quad->vertices[vertex_index].position.x += offset.x;
+            quad->vertices[vertex_index].position.y += offset.y;
+        }
+    }
+
+    used_box.min.x += offset.x;
+    used_box.min.y += offset.y;
+    used_box.max.x += offset.x;
+    used_box.max.y += offset.y;
+
+    return used_box;
+}
+
 moui_used_box_begin_signature
 {
     moui_box2 begin_box = state->renderer.used_box;
@@ -1776,7 +1844,7 @@ moui_texture_box_signature
 {
     moui_set_command_texture(state, layer, texture);
 
-    moui_vec2 texture_scale = { 1.0f /  texture.width, 1.0f / texture.height };    
+    moui_vec2 texture_scale = { 1.0f /  texture.width, 1.0f / texture.height };
     moui_add_texture_quad(state, texture_scale, colors, box, texture_box);
 }
 
@@ -1959,7 +2027,7 @@ moui_rounded_box_signature
     moui_f32 corner_size = moui_f32_ceil(corner_radius);
 
     // add some row allignment for gl texture
-    moui_s32 row_width = ((moui_s32) (corner_size + 1) + 3) & ~3;   
+    moui_s32 row_width = ((moui_s32) (corner_size + 1) + 3) & ~3;
     atlas->buffer_request_byte_count = moui_u32_max(atlas->buffer_request_byte_count, (moui_u32) (row_width * (corner_size + 1)));
 
     moui_atlas_item *found_item = moui_get_atlas_item(atlas, key_item, 1);
@@ -1974,7 +2042,7 @@ moui_rounded_box_signature
 
     moui_box2 tile_box;
     moui_box2 tile_texture_box;
-    
+
     // exclude white border
     item.texture_box.max.x -= 1;
     item.texture_box.max.y -= 1;
@@ -2001,7 +2069,7 @@ moui_rounded_box_signature
             moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
 
         tile_box.max.x = box.max.x;
-        tile_box.min.x = tile_box.max.x - corner_size;        
+        tile_box.min.x = tile_box.max.x - corner_size;
         tile_texture_box.min.x = item.texture_box.min.x;
         tile_texture_box.max.x = item.texture_box.max.x;
         moui_add_texture_quad(state, texture_scale, colors, tile_box, tile_texture_box);
@@ -2380,6 +2448,11 @@ moui_f32_max_signature
         return a;
     else
         return b;
+}
+
+moui_box2_size_signature
+{
+    return moui_sl(moui_vec2) { box.max.x - box.min.x, box.max.y - box.min.y };
 }
 
 moui_box2_merge_signature

@@ -75,7 +75,11 @@ typedef enum
     mote_character_symbol_backspace,
     mote_character_symbol_escape,
     mote_character_symbol_delete,
-    mote_character_symbol_newline,
+    mote_character_symbol_return,
+    mote_character_symbol_left,
+    mote_character_symbol_right,
+    mote_character_symbol_up,
+    mote_character_symbol_down,
 } mote_character_symbol;
 
 typedef struct
@@ -123,7 +127,7 @@ mote_handle_character_signature
                 }
             } break;
 
-            case mote_character_symbol_newline:
+            case mote_character_symbol_return:
             {
                 if (text->used_count < text->total_count)
                 {
