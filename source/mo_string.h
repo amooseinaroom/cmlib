@@ -116,7 +116,7 @@ mos_parse_s64_ex_signature;
 #define mos_parse_s64_signature mos_b8 mos_parse_s64(mos_s64 *result, mos_string *iterator)
 mos_parse_s64_signature;
 
-#define mos_buffer_from_memory_signature mos_string_buffer mos_buffer_from_memory(mos_u8 *base, mos_u32 count)
+#define mos_buffer_from_memory_signature mos_string_buffer mos_buffer_from_memory(u8 *base, mos_usize count)
 mos_buffer_from_memory_signature;
 
 #define mos_buffer_to_string_signature mos_string mos_buffer_to_string(mos_string_buffer buffer)
@@ -365,7 +365,7 @@ mos_parse_s64_ex_signature
 mos_buffer_from_memory_signature
 {
     mos_string_buffer buffer = {0};
-    buffer.base = base;
+    buffer.base        = base;
     buffer.total_count = count;
 
     return buffer;
@@ -393,6 +393,8 @@ mos_write_signature
     return result;
 }
 
+#if defined(_WIN32) || defined(WIN32)
+
 mos_write_va_signature
 {
     mos_s32 count = vsprintf_s((char *) buffer->base + buffer->used_count, buffer->total_count - buffer->used_count, format, arguments);
@@ -402,5 +404,19 @@ mos_write_va_signature
 
     return result;
 }
+
+#elif __EMSCRIPTEN__
+
+mos_write_va_signature
+{
+    mos_s32 count = vsnprintf((char *) buffer->base + buffer->used_count, buffer->total_count - buffer->used_count, format, arguments);
+    mos_assert(count >= 0);
+    mos_string result = { buffer->base + buffer->used_count, (mos_usize) count };
+    buffer->used_count += count;
+
+    return result;
+}
+
+#endif
 
 #endif

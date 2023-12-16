@@ -8,21 +8,6 @@
 extern "C" {
 #endif
 
-#if !defined mop_assert
-#if defined mop_debug
-// TODO: create proper message box
-#include <stdio.h>
-#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); __debugbreak(); }
-#else
-#define mop_assert(x)
-#endif
-#endif
-
-#if !defined mop_require
-#include <stdio.h>
-#define mop_require(x) if (!(x)) { printf("%s,%s,%u: Requirement Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); int error = GetLastError(); if (error) printf("   GetLastError() = %i\n", error); __debugbreak(); }
-#endif
-
 #define mop_cases_complete(value) default: mop_assert(0)
 
 typedef unsigned char      mop_u8;
@@ -151,7 +136,7 @@ struct mop_platform;
 #define mop_init_signature void mop_init(mop_platform *platform)
 mop_init_signature;
 
-#define mop_window_init_signature void mop_window_init(mop_platform *platform, mop_window *window, mop_cstring title)
+#define mop_window_init_signature void mop_window_init(mop_platform *platform, mop_window *window, mop_cstring title, mop_s32 width, mop_s32 height)
 mop_window_init_signature;
 
 #define mop_window_get_info_signature mop_window_info mop_window_get_info(mop_platform *platform, mop_window *window)
@@ -190,6 +175,12 @@ mop_allocate_signature;
 #define mop_free_signature void mop_free(mop_platform *platform, mop_u8 *base)
 mop_free_signature;
 
+#define mop_key_was_pressed_signature mop_b8 mop_key_was_pressed(mop_platform *platform, mop_u32 key)
+mop_key_was_pressed_signature;
+
+#define mop_key_was_released_signature mop_b8 mop_key_was_released(mop_platform *platform, mop_u32 key)
+mop_key_was_released_signature;
+
 #ifdef __cplusplus
 }
 #endif
@@ -199,10 +190,33 @@ mop_free_signature;
 #if defined mop_implementation
 #undef mop_implementation
 
+#define mop_key_event_update_signature void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_event_update_signature;
+
+#define mop_key_poll_update_signature void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_poll_update_signature;
+
+#if defined(_WIN32) || defined(WIN32)
+
 #include <windows.h>
 
 #pragma comment(lib, "gdi32")
 #pragma comment(lib, "user32")
+
+#if !defined mop_assert
+#if defined mop_debug
+// TODO: create proper message box
+#include <stdio.h>
+#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); __debugbreak(); }
+#else
+#define mop_assert(x)
+#endif
+#endif
+
+#if !defined mop_require
+#include <stdio.h>
+#define mop_require(x) if (!(x)) { printf("%s,%s,%u: Requirement Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); int error = GetLastError(); if (error) printf("   GetLastError() = %i\n", error); __debugbreak(); }
+#endif
 
 enum mop_character_symbol
 {
@@ -225,6 +239,8 @@ enum mop_key
     mop_key_mouse_left = VK_LBUTTON,
     mop_key_mouse_middle = VK_MBUTTON,
     mop_key_mouse_right = VK_RBUTTON,
+    mop_key_control = VK_CONTROL,
+    mop_key_f0 = VK_F1 - 1,
 };
 
 struct mop_platform
@@ -244,7 +260,6 @@ struct mop_platform
     mop_f32 delta_seconds;
 
     mop_b8 do_quit;
-
 
     struct
     {
@@ -305,7 +320,14 @@ mop_window_init_signature
 {
     mop_assert(!window->handle);
 
-    window->handle = CreateWindowExA(0, mop_win32_window_class_name, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, mop_null, mop_null, (HINSTANCE) GetModuleHandleA(mop_null), mop_null);
+    RECT client_rect;
+    client_rect.left = 0;
+    client_rect.right = width;
+    client_rect.top = 0;
+    client_rect.bottom = height;
+    AdjustWindowRect(&client_rect, WS_OVERLAPPEDWINDOW, false);
+
+    window->handle = CreateWindowExA(0, mop_win32_window_class_name, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, client_rect.right - client_rect.left, client_rect.bottom - client_rect.top, mop_null, mop_null, (HINSTANCE) GetModuleHandleA(mop_null), mop_null);
     mop_require(window->handle);
 
     ShowWindow(window->handle, SW_SHOW);
@@ -353,26 +375,6 @@ void mop_win32_add_character(mop_platform *platform, mop_u32 code, mop_b8 is_sym
     }
 }
 
-void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
-{
-    mop_assert(key < mop_carray_count(platform->keys));
-
-    // mop_assert(platform->keys[key].is_active != is_active);
-
-    if (platform->keys[key].half_transition_count == 63)
-        platform->keys[key].half_transition_overflow = mop_true;
-
-    platform->keys[key].half_transition_count += 1;
-    platform->keys[key].is_active = is_active;
-}
-
-void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
-{
-    mop_assert(key < mop_carray_count(platform->keys));
-
-    if (platform->keys[key].is_active != is_active)
-        mop_key_event_update(platform, key, is_active);
-}
 
 mop_handle_messages_signature
 {
@@ -612,6 +614,8 @@ mop_read_file_signature
         byte_count -= read_count;
     }
 
+    CloseHandle(handle);
+
     return result;
 }
 
@@ -642,6 +646,8 @@ mop_write_file_signature
         data.base  += write_count;
         data.count -= write_count;
     }
+
+    CloseHandle(handle);
 
     return mop_true;
 }
@@ -798,6 +804,116 @@ mop_allocate_signature
 mop_free_signature
 {
     mop_require(VirtualFree(base, 0, MEM_RELEASE));
+}
+
+#elif __EMSCRIPTEN__
+
+#if !defined mop_assert
+#if defined mop_debug
+// TODO: create proper message box
+#include <stdio.h>
+#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); }
+#else
+#define mop_assert(x)
+#endif
+#endif
+
+#if !defined mop_require
+#include <stdio.h>
+#define mop_require(x) if (!(x)) { printf("%s,%s,%u: Requirement Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); }
+#endif
+
+enum mop_character_symbol
+{
+    mop_character_symbol_backspace,
+    mop_character_symbol_escape,
+    mop_character_symbol_delete,
+    mop_character_symbol_newline,
+};
+
+enum mop_key
+{
+    mop_key_return,
+    mop_key_backspace,
+    mop_key_escape,
+    mop_key_delete,
+    mop_key_mouse_left,
+    mop_key_mouse_middle,
+    mop_key_mouse_right,
+};
+
+struct mop_platform
+{
+    mop_character characters[32];
+    mop_u32 character_count;
+    mop_u32 missed_character_count;
+
+    mop_key_state keys[256];
+
+    mop_point previous_mouse_position;
+    mop_point mouse_position;
+
+    mop_u64 realtime_counter_ticks_per_second;
+    mop_u64 last_realtime_counter;
+
+    mop_f32 delta_seconds;
+
+    mop_b8 do_quit;
+
+    struct
+    {
+        u8 unused;
+    } emscripten;
+};
+
+struct mop_window
+{
+    u8 unused;
+    //HWND handle;
+    //HDC  device_context;
+};
+
+#else
+
+#error mop_implementation not implemented for current platform
+
+#endif
+
+mop_key_event_update_signature
+{
+    mop_assert(key < mop_carray_count(platform->keys));
+
+    // mop_assert(platform->keys[key].is_active != is_active);
+
+    if (platform->keys[key].half_transition_count == 63)
+        platform->keys[key].half_transition_overflow = mop_true;
+
+    platform->keys[key].half_transition_count += 1;
+    platform->keys[key].is_active = is_active;
+}
+
+mop_key_poll_update_signature
+{
+    mop_assert(key < mop_carray_count(platform->keys));
+
+    if (platform->keys[key].is_active != is_active)
+        mop_key_event_update(platform, key, is_active);
+}
+
+mop_key_was_pressed_signature
+{
+    mop_assert(key < mop_carray_count(platform->keys));
+    mop_key_state state = platform->keys[key];
+
+    return state.half_transition_overflow || (state.half_transition_count >= 2 - state.is_active);
+}
+
+mop_key_was_released_signature
+{
+    mop_assert(key < mop_carray_count(platform->keys));
+    mop_key_state state = platform->keys[key];
+
+    return state.half_transition_overflow || (state.half_transition_count >= 1 + state.is_active);
 }
 
 #endif
