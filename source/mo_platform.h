@@ -56,9 +56,9 @@ typedef mop_u8_array mop_string;
 #define mop_sl(name) (name)
 #endif
 
-#define mop_s(static_string) mop_sl(string) { (mos_u8 *) static_string, mop_carray_count(static_string) - 1 }
+#define mop_s(static_string) mop_sl(string) { (mop_u8 *) static_string, mop_carray_count(static_string) - 1 }
 // sometimes needed to initialize global values
-#define mop_sc(const_static_string) { (mos_u8 *) static_string, mop_carray_count(static_string) - 1 }
+#define mop_sc(const_static_string) { (mop_u8 *) const_static_string, mop_carray_count(const_static_string) - 1 }
 #define mop_fs(text) (int) (text).count, (char *) (text).base
 
 const mop_string mop_string_empty = {0};
@@ -71,6 +71,12 @@ typedef struct mop_window mop_window;
 
 typedef struct mop_file_search_iterator mop_file_search_iterator;
 struct mop_file_search_iterator;
+
+typedef struct mop_library mop_library;
+struct mop_library;
+
+typedef struct mop_hot_reload_state mop_hot_reload_state;
+struct mop_hot_reload_state;
 
 typedef struct
 {
@@ -151,6 +157,9 @@ mop_get_realtime_counter_signature;
 #define mop_get_file_byte_count_signature mop_get_file_byte_count_result mop_get_file_byte_count(mop_platform *platform, mop_string path)
 mop_get_file_byte_count_signature;
 
+#define mop_get_file_write_timestamp_signature mop_u64 mop_get_file_write_timestamp(mop_platform *platform, mop_string path)
+mop_get_file_write_timestamp_signature;
+
 #define mop_normalize_path_signature void mop_normalize_path(mop_string *path)
 mop_normalize_path_signature;
 
@@ -163,6 +172,9 @@ mop_read_file_signature;
 #define mop_write_file_signature mop_b8 mop_write_file(mop_platform *platform, mop_string path, mop_u8_array data)
 mop_write_file_signature;
 
+#define mop_copy_file_signature mop_b8 mop_copy_file(mop_platform *platform, mop_string to_path, mop_string from_path, mop_b8 override)
+mop_copy_file_signature;
+
 #define mop_file_search_init_signature mop_file_search_iterator mop_file_search_init(mop_platform *platform, mop_string directory_path)
 mop_file_search_init_signature;
 
@@ -174,6 +186,23 @@ mop_allocate_signature;
 
 #define mop_free_signature void mop_free(mop_platform *platform, mop_u8 *base)
 mop_free_signature;
+
+#define mop_load_library_signature mop_b8 mop_load_library(mop_platform *platform, mop_library *library, mop_string name)
+mop_load_library_signature;
+
+#define mop_unload_library_signature void mop_unload_library(mop_platform *platform, mop_library *library)
+mop_unload_library_signature;
+
+#define mop_load_symbol_signature mop_u8 * mop_load_symbol(mop_platform *platform, mop_library *library, mop_string name)
+mop_load_symbol_signature;
+
+#define mop_hot_update_type(name) mop_b8 name(mop_platform *platform, mop_u8_array data, mop_b8 did_reload)
+typedef mop_hot_update_type((*mop_hot_update_function));
+
+const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
+#define mop_hot_update_signature __declspec(dllexport) mop_hot_update_type(mop_hot_update)
+
+#define mop_hot_reload_signature mop_b8 mop_hot_reload(mop_platform *platform, mop_hot_reload_state *state, mop_string name)
 
 #define mop_key_was_pressed_signature mop_b8 mop_key_was_pressed(mop_platform *platform, mop_u32 key)
 mop_key_was_pressed_signature;
@@ -271,6 +300,18 @@ struct mop_window
 {
     HWND handle;
     HDC  device_context;
+};
+
+struct mop_library
+{
+    HMODULE module;
+};
+
+struct mop_hot_reload_state
+{
+    mop_library             library;
+    mop_hot_update_function hot_update;
+    mop_u64                 write_timestamp;
 };
 
 struct mop_file_search_iterator
@@ -565,6 +606,23 @@ mop_get_file_byte_count_signature
     return mop_sl(mop_get_file_byte_count_result) { byte_count, mop_true };
 }
 
+mop_get_file_write_timestamp_signature
+{
+    mop_u8 cpath[MAX_PATH];
+    mop_win32_to_cpath(cpath, path);
+
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if (!GetFileAttributesExA((mop_cstring) cpath, GetFileExInfoStandard, &data))
+    {
+        mop_s32 error = GetLastError();
+        mop_require(error == ERROR_FILE_NOT_FOUND);
+
+        return 0;
+    }
+
+    return *(mop_u64 *) &data.ftLastWriteTime;
+}
+
 mop_path_is_directory_signature
 {
     if (!path.count)
@@ -650,6 +708,18 @@ mop_write_file_signature
     CloseHandle(handle);
 
     return mop_true;
+}
+
+mop_copy_file_signature
+{
+    mop_u8 to_cpath[MAX_PATH];
+    mop_win32_to_cpath(to_cpath, to_path);
+
+    mop_u8 from_cpath[MAX_PATH];
+    mop_win32_to_cpath(from_cpath, from_path);
+
+    mop_b8 ok = CopyFileA((mop_cstring) from_cpath, (mop_cstring) to_cpath, (mop_s32) !override);
+    return ok;
 }
 
 mop_normalize_path_signature
@@ -804,6 +874,95 @@ mop_allocate_signature
 mop_free_signature
 {
     mop_require(VirtualFree(base, 0, MEM_RELEASE));
+}
+
+mop_load_library_signature
+{
+    mop_u8 cname[MAX_PATH];
+    mop_assert(name.count + 4 < mop_carray_count(cname));
+    mop_win32_to_cpath(cname, name);
+    cname[name.count] = '.';
+    cname[name.count + 1] = 'd';
+    cname[name.count + 2] = 'l';
+    cname[name.count + 3] = 'l';
+    cname[name.count + 4] = '\0';
+
+    library->module = LoadLibraryA((mop_cstring) cname);
+    return library->module != mop_null;
+}
+
+mop_unload_library_signature
+{
+    mop_assert(library->module);
+    mop_require(FreeLibrary(library->module));
+    library->module = mop_null;
+}
+
+mop_load_symbol_signature
+{
+    mop_assert(library->module);
+
+    // not a path, but probably big enough
+    mop_u8 cname[MAX_PATH];
+    mop_win32_to_cpath(cname, name);
+
+    mop_u8 *symbol = (mop_u8 *) GetProcAddress(library->module, (mop_cstring) cname);
+    return symbol;
+}
+
+mop_hot_reload_signature
+{
+    mop_u8 dll_name_buffer[MAX_PATH];
+    mop_string dll_name = { dll_name_buffer, name.count + 4 };
+
+    mop_win32_to_cpath(dll_name_buffer, name);
+    dll_name_buffer[name.count] = '.';
+    dll_name_buffer[name.count + 1] = 'd';
+    dll_name_buffer[name.count + 2] = 'l';
+    dll_name_buffer[name.count + 3] = 'l';
+    dll_name_buffer[name.count + 4] = '\0';
+
+    mop_u64 write_timestamp = mop_get_file_write_timestamp(platform, dll_name);
+    if (write_timestamp == state->write_timestamp)
+        return mop_false;
+
+    state->write_timestamp = write_timestamp;
+
+    mop_library test_library = {0};
+    if (!mop_load_library(platform, &test_library, name))
+        return mop_false;
+
+    {
+        mop_hot_update_function hot_update = (mop_hot_update_function) mop_load_symbol(platform, &test_library, mop_hot_update_name);
+        mop_unload_library(platform, &test_library);
+
+        if (!hot_update)
+            return mop_false;
+    }
+
+    if (state->library.module)
+        mop_unload_library(platform, &state->library);
+
+    mop_u8 hot_name_buffer[] = "hot_00.dll";
+    mop_string hot_name = { hot_name_buffer, mop_carray_count(hot_name_buffer) - 1 };
+
+    mop_u32 i;
+    for (i = 1; i < 33; i++)
+    {
+        hot_name_buffer[4] = '0' + (i / 10);
+        hot_name_buffer[5] = '0' + (i % 10);
+
+        if (mop_copy_file(platform, hot_name, dll_name, mop_true))
+            break;
+    }
+
+    mop_require(i < 33);
+
+    hot_name.count -= 4; // without .dll
+    mop_require(mop_load_library(platform, &state->library, hot_name));
+    state->hot_update = (mop_hot_update_function) mop_load_symbol(platform, &state->library, mop_hot_update_name);
+
+    return mop_true;
 }
 
 #elif __EMSCRIPTEN__

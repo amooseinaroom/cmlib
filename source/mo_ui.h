@@ -821,13 +821,13 @@ moui_platform_init_signature;
 
 #define moui_gl_load(function) moui_ ## function = (moui_ ## function ## _function) wglGetProcAddress(# function)
 
-typedef signed int  (*moui_wglChoosePixelFormatARB_function)(HDC hdc, signed int *piAttribIList, float *pfAttribFList, unsigned int nMaxFormats, signed int *piFormats, unsigned int *nNumFormats);
+typedef signed int (*moui_wglChoosePixelFormatARB_function)(HDC hdc, signed int *piAttribIList, float *pfAttribFList, unsigned int nMaxFormats, signed int *piFormats, unsigned int *nNumFormats);
 moui_wglChoosePixelFormatARB_function moui_wglChoosePixelFormatARB;
 
-typedef HGLRC  (*moui_wglCreateContextAttribsARB_function)(HDC hDC, HGLRC hShareContext, signed int *attribList);
+typedef HGLRC (*moui_wglCreateContextAttribsARB_function)(HDC hDC, HGLRC hShareContext, signed int *attribList);
 moui_wglCreateContextAttribsARB_function moui_wglCreateContextAttribsARB;
 
-typedef signed int  (*moui_wglSwapIntervalEXT_function)(signed int interval);
+typedef signed int (*moui_wglSwapIntervalEXT_function)(signed int interval);
 moui_wglSwapIntervalEXT_function moui_wglSwapIntervalEXT;
 
 struct moui_default_window
@@ -1326,36 +1326,41 @@ moui_gl_create_shader_program_signature;
 #define moui_gl_create_shader_object_signature moui_u32 moui_gl_create_shader_object(moui_string name, moui_b8 is_fragment_shader, moui_u32 source_count, moui_string *sources)
 moui_gl_create_shader_object_signature;
 
+void moui_gl_reload()
+{
+    moui_gl_required_load(glCreateShader);
+    moui_gl_required_load(glCreateProgram);
+    moui_gl_required_load(glShaderSource);
+    moui_gl_required_load(glCompileShader);
+    moui_gl_required_load(glGetShaderiv);
+    moui_gl_required_load(glAttachShader);
+    moui_gl_required_load(glBindAttribLocation);
+    moui_gl_required_load(glLinkProgram);
+    moui_gl_required_load(glGetProgramiv);
+    moui_gl_required_load(glGetUniformLocation);
+    moui_gl_required_load(glDeleteShader);
+    moui_gl_required_load(glGenVertexArrays);
+    moui_gl_required_load(glBindVertexArray);
+    moui_gl_required_load(glEnableVertexAttribArray);
+    moui_gl_required_load(glVertexAttribPointer);
+    moui_gl_required_load(glDeleteVertexArrays);
+    moui_gl_required_load(glGenBuffers);
+    moui_gl_required_load(glDeleteBuffers);
+    moui_gl_required_load(glBindBuffer);
+    moui_gl_required_load(glBufferData);
+    moui_gl_required_load(glBufferSubData);
+    moui_gl_required_load(glUseProgram);
+    moui_gl_required_load(glUniform1i);
+    moui_gl_required_load(glActiveTexture);
+}
+
 moui_default_init_signature
 {
     moui_platform_init(default_state);
 
     if (default_state->base.renderer.gl.is_modern)
     {
-        moui_gl_required_load(glCreateShader);
-        moui_gl_required_load(glCreateProgram);
-        moui_gl_required_load(glShaderSource);
-        moui_gl_required_load(glCompileShader);
-        moui_gl_required_load(glGetShaderiv);
-        moui_gl_required_load(glAttachShader);
-        moui_gl_required_load(glBindAttribLocation);
-        moui_gl_required_load(glLinkProgram);
-        moui_gl_required_load(glGetProgramiv);
-        moui_gl_required_load(glGetUniformLocation);
-        moui_gl_required_load(glDeleteShader);
-        moui_gl_required_load(glGenVertexArrays);
-        moui_gl_required_load(glBindVertexArray);
-        moui_gl_required_load(glEnableVertexAttribArray);
-        moui_gl_required_load(glVertexAttribPointer);
-        moui_gl_required_load(glDeleteVertexArrays);
-        moui_gl_required_load(glGenBuffers);
-        moui_gl_required_load(glDeleteBuffers);
-        moui_gl_required_load(glBindBuffer);
-        moui_gl_required_load(glBufferData);
-        moui_gl_required_load(glBufferSubData);
-        moui_gl_required_load(glUseProgram);
-        moui_gl_required_load(glUniform1i);
-        moui_gl_required_load(glActiveTexture);
+        moui_gl_reload();
 
         moui_string vertex_shader = moui_s(
             "#version 330\n"
