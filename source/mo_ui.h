@@ -802,8 +802,6 @@ moui_platform_init_signature;
 #pragma comment(lib, "user32")
 #pragma comment(lib, "opengl32")
 
-#define moui_gl_load(function) moui_ ## function = (moui_ ## function ## _function) wglGetProcAddress(# function)
-
 #define WGL_DRAW_TO_WINDOW_ARB 0x2001
 #define WGL_SUPPORT_OPENGL_ARB 0x2010
 #define WGL_DOUBLE_BUFFER_ARB 0x2011
@@ -819,6 +817,10 @@ moui_platform_init_signature;
 #define WGL_CONTEXT_FLAGS_ARB 0x2094
 #define WGL_CONTEXT_DEBUG_BIT_ARB 0x00000001
 
+#endif
+
+#define moui_gl_load(function) moui_ ## function = (moui_ ## function ## _function) wglGetProcAddress(# function)
+
 typedef signed int  (*moui_wglChoosePixelFormatARB_function)(HDC hdc, signed int *piAttribIList, float *pfAttribFList, unsigned int nMaxFormats, signed int *piFormats, unsigned int *nNumFormats);
 moui_wglChoosePixelFormatARB_function moui_wglChoosePixelFormatARB;
 
@@ -827,8 +829,6 @@ moui_wglCreateContextAttribsARB_function moui_wglCreateContextAttribsARB;
 
 typedef signed int  (*moui_wglSwapIntervalEXT_function)(signed int interval);
 moui_wglSwapIntervalEXT_function moui_wglSwapIntervalEXT;
-
-#endif
 
 struct moui_default_window
 {
@@ -1172,10 +1172,6 @@ void moui_gl_error(moui_cstring command, moui_cstring function, moui_u32 line)
     }
 }
 
-#if defined moui_gl_symbols
-#define moui_gl_load(function)
-#endif
-
 #define moui_gl_required_load(function) moui_gl_load(function); moui_require(moui_ ## function)
 
 #if !defined moui_gl_symbols
@@ -1190,10 +1186,12 @@ void moui_gl_error(moui_cstring command, moui_cstring function, moui_u32 line)
 #define GL_DYNAMIC_DRAW 0x88E8
 #define GL_TEXTURE0 0x84C0
 
-typedef GLuint  (*moui_glCreateShader_function)(GLenum type);
+#endif
+
+typedef GLuint (*moui_glCreateShader_function)(GLenum type);
 moui_glCreateShader_function moui_glCreateShader;
 
-typedef GLuint  (*moui_glCreateProgram_function)();
+typedef GLuint (*moui_glCreateProgram_function)();
 moui_glCreateProgram_function moui_glCreateProgram;
 
 typedef void (*moui_glShaderSource_function)(GLuint shader, GLsizei count, char **string, GLint *length);
@@ -1261,8 +1259,6 @@ moui_glUniform1i_function moui_glUniform1i;
 
 typedef void (*moui_glActiveTexture_function)(GLenum texture);
 moui_glActiveTexture_function moui_glActiveTexture;
-
-#endif
 
 moui_create_texture_signature
 {
