@@ -268,6 +268,7 @@ enum mop_key
     mop_key_mouse_left = VK_LBUTTON,
     mop_key_mouse_middle = VK_MBUTTON,
     mop_key_mouse_right = VK_RBUTTON,
+    mop_key_shift = VK_SHIFT,
     mop_key_control = VK_CONTROL,
     mop_key_f0 = VK_F1 - 1,
 };
@@ -531,7 +532,8 @@ mop_handle_messages_signature
                 }
             }
 
-            mop_key_event_update(platform, msg.wParam, mop_true);
+            if (!(msg.lParam & (1 << 30)))
+                mop_key_event_update(platform, msg.wParam, mop_true);
         } break;
 
         case WM_CHAR:

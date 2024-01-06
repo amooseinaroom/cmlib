@@ -138,6 +138,8 @@ typedef union
         moui_vec2 max;
     };
 
+    moui_vec2 extends[2];
+
     moui_f32 values[4];
 } moui_box2;
 
