@@ -116,6 +116,9 @@ mos_parse_s64_ex_signature;
 #define mos_parse_s64_signature mos_b8 mos_parse_s64(mos_s64 *result, mos_string *iterator)
 mos_parse_s64_signature;
 
+#define mos_parse_f64_signature mos_b8 mos_parse_f64(mos_f64 *result, mos_string *iterator)
+mos_parse_f64_signature;
+
 #define mos_buffer_from_memory_signature mos_string_buffer mos_buffer_from_memory(u8 *base, mos_usize count)
 mos_buffer_from_memory_signature;
 
@@ -360,6 +363,45 @@ mos_parse_s64_ex_signature
     }
 
     return ok;
+}
+
+mos_parse_f64_signature
+{    
+    mos_string test_iterator = *iterator;        
+    
+    mos_f64 sign = 1.0;
+    if (test_iterator.count && test_iterator.base[0] == '-')
+    {
+        sign = -1.0;
+        test_iterator.base  += 1;
+        test_iterator.count -= 1;
+    }
+    
+    mos_u64 whole;
+    if (!mos_parse_u64(&whole, &test_iterator))
+        return mos_false;
+    
+    mos_f64 value = whole;    
+    if (test_iterator.count && (test_iterator.base[0] == '.'))
+    {                   
+        mos_f64 fraction = 0.1;
+        mos_usize count = 1;
+        while (count < test_iterator.count)
+        {
+            mos_u8 symbol = test_iterator.base[count];
+            mos_u8 digit = symbol - '0';
+            if (digit > 9)
+                return mos_false;
+                
+            value += fraction * digit;
+            fraction *= 0.1;
+        }
+    }
+            
+    *result = value * sign;
+    *iterator = test_iterator;
+    
+    return mos_true;
 }
 
 mos_buffer_from_memory_signature

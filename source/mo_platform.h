@@ -72,6 +72,9 @@ typedef struct mop_window mop_window;
 typedef struct mop_file_search_iterator mop_file_search_iterator;
 struct mop_file_search_iterator;
 
+typedef struct mop_thread mop_thread;
+struct mop_thread;
+
 typedef struct mop_library mop_library;
 struct mop_library;
 
@@ -187,6 +190,38 @@ mop_allocate_signature;
 #define mop_free_signature void mop_free(mop_platform *platform, mop_u8 *base)
 mop_free_signature;
 
+#define mop_sleep_milliseconds_signature void mop_sleep_milliseconds(mop_platform *platform, u32 milliseconds)
+mop_sleep_milliseconds_signature;
+
+#define mop_thread_function(name) s32 name(u8 *user_data)
+typedef mop_thread_function((*mop_thread_function_type));
+
+#define mop_thread_init_signature void mop_thread_init(mop_platform *platform, mop_thread *thread, mop_thread_function_type function, u8 *user_data)
+mop_thread_init_signature;
+
+#define mop_thread_start_signature void mop_thread_start(mop_platform *platform, mop_thread *thread)
+mop_thread_start_signature;
+
+#define mop_thread_wait_for_exit_signature void mop_thread_wait_for_exit(mop_platform *platform, mop_thread *thread)
+mop_thread_wait_for_exit_signature;
+
+#define mop_thread_kill_signature void mop_thread_kill(mop_platform *platform, mop_thread *thread)
+mop_thread_kill_signature;
+
+#define mop_atomic_increment_s64_signature s64 mop_atomic_increment_s64(mop_platform *platform, s64 *value)
+mop_atomic_increment_s64_signature;
+
+#define mop_atomic_decrement_s64_signature s64 mop_atomic_decrement_s64(mop_platform *platform, s64 *value)
+mop_atomic_decrement_s64_signature;
+
+#define mop_atomic_add_s64_signature s64 mop_atomic_add_s64(mop_platform *platform, s64 *value, s64 delta)
+mop_atomic_add_s64_signature;
+
+#define mop_atomic_sub_s64_signature s64 mop_atomic_sub_s64(mop_platform *platform, s64 *value, s64 delta)
+mop_atomic_sub_s64_signature;
+
+#define mop_atomic_compare_exchange_s32_signature s64 mop_atomic_compare_exchange_s32(mop_platform *platform, s32 *value, s32 expected_value, s32 new_value)
+
 #define mop_load_library_signature mop_b8 mop_load_library(mop_platform *platform, mop_library *library, mop_string name)
 mop_load_library_signature;
 
@@ -228,6 +263,7 @@ mop_key_poll_update_signature;
 #if defined(_WIN32) || defined(WIN32)
 
 #include <windows.h>
+#include <intrin.h>
 
 #pragma comment(lib, "gdi32")
 #pragma comment(lib, "user32")
@@ -300,6 +336,12 @@ struct mop_window
 {
     HWND handle;
     HDC  device_context;
+};
+
+struct mop_thread
+{
+    HANDLE handle;
+    mop_u8 is_running;
 };
 
 struct mop_library
@@ -874,6 +916,63 @@ mop_allocate_signature
 mop_free_signature
 {
     mop_require(VirtualFree(base, 0, MEM_RELEASE));
+}
+
+mop_sleep_milliseconds_signature
+{
+    Sleep(milliseconds);
+}
+
+mop_thread_init_signature
+{
+    mop_assert(!thread->handle);
+    thread->handle = CreateThread(mop_null, 0, (LPTHREAD_START_ROUTINE) function, user_data, CREATE_SUSPENDED, mop_null);
+    mop_require(thread->handle);
+}
+
+mop_thread_start_signature
+{
+    mop_assert(thread->handle && !thread->is_running);
+    mop_require(ResumeThread(thread->handle));
+    thread->is_running = mop_true;
+}
+
+mop_thread_wait_for_exit_signature
+{
+    mop_assert(thread->handle && thread->is_running);
+    mop_require(WaitForSingleObject(thread->handle, INFINITE) == WAIT_OBJECT_0);
+    mop_require(CloseHandle(thread->handle));
+
+    *thread  = mop_sl(mop_thread) {0};
+}
+
+mop_thread_kill_signature
+{
+    mop_assert(thread->handle && thread->is_running);    
+    mop_require(TerminateThread(thread->handle, 0));
+    mop_require(CloseHandle(thread->handle));
+    
+    *thread  = mop_sl(mop_thread) {0};
+}
+
+mop_atomic_increment_s64_signature
+{
+    return _InterlockedIncrement64(value);
+}
+
+mop_atomic_decrement_s64_signature
+{
+    return _InterlockedDecrement64(value);
+}
+
+mop_atomic_add_s64_signature
+{
+    return _InlineInterlockedAdd64(value, delta);
+}
+
+mop_atomic_compare_exchange_s32_signature
+{
+    return InterlockedCompareExchange(value, new_value, expected_value);
 }
 
 mop_load_library_signature
