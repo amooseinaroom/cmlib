@@ -948,10 +948,10 @@ mop_thread_wait_for_exit_signature
 
 mop_thread_kill_signature
 {
-    mop_assert(thread->handle && thread->is_running);    
+    mop_assert(thread->handle && thread->is_running);
     mop_require(TerminateThread(thread->handle, 0));
     mop_require(CloseHandle(thread->handle));
-    
+
     *thread  = mop_sl(mop_thread) {0};
 }
 
