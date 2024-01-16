@@ -101,6 +101,9 @@ copy_signature;
 // example: printf("%.*s", fs(my_string));
 #define fs(text) (int) (text).count, (char *) (text).base
 
+#define flag32(bit) (((u32) 1) << (bit))
+#define flag64(bit) (((u64) 1) << (bit))
+
 #ifdef __cplusplus
 }
 #endif
