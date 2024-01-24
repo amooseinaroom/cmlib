@@ -235,9 +235,15 @@ mop_load_symbol_signature;
 typedef mop_hot_update_type((*mop_hot_update_function));
 
 const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
-#define mop_hot_update_signature __declspec(dllexport) mop_hot_update_type(mop_hot_update)
+#define mop_hot_update_signature extern "C" __declspec(dllexport) mop_hot_update_type(mop_hot_update)
 
 #define mop_hot_reload_signature mop_b8 mop_hot_reload(mop_platform *platform, mop_hot_reload_state *state, mop_string name)
+
+#define mop_key_state_was_pressed_signature mop_b8 mop_key_state_was_pressed(mop_key_state state)
+mop_key_state_was_pressed_signature;
+
+#define mop_key_state_was_released_signature mop_b8 mop_key_state_was_released(mop_key_state state)
+mop_key_state_was_released_signature;
 
 #define mop_key_was_pressed_signature mop_b8 mop_key_was_pressed(mop_platform *platform, mop_u32 key)
 mop_key_was_pressed_signature;
@@ -301,9 +307,16 @@ enum mop_key
     mop_key_backspace = VK_BACK,
     mop_key_escape = VK_ESCAPE,
     mop_key_delete = VK_DELETE,
+    
     mop_key_mouse_left = VK_LBUTTON,
     mop_key_mouse_middle = VK_MBUTTON,
     mop_key_mouse_right = VK_RBUTTON,
+    
+    mop_key_left  = VK_LEFT,
+    mop_key_right = VK_RIGHT,
+    mop_key_down  = VK_DOWN,
+    mop_key_up    = VK_UP,
+    
     mop_key_control = VK_CONTROL,
     mop_key_f0 = VK_F1 - 1,
 };
@@ -420,6 +433,7 @@ mop_window_init_signature
 
     mop_require(QueryPerformanceFrequency((LARGE_INTEGER *) &platform->realtime_counter_ticks_per_second));
 }
+
 
 mop_window_get_info_signature
 {
@@ -572,8 +586,9 @@ mop_handle_messages_signature
                         mop_win32_add_character(platform, msg.wParam, mop_false, with_shift, with_alt, with_control);
                 }
             }
-
-            mop_key_event_update(platform, msg.wParam, mop_true);
+            
+            if (!(msg.lParam & (1 << 30)))
+                mop_key_event_update(platform, msg.wParam, mop_true);
         } break;
 
         case WM_CHAR:
@@ -686,7 +701,7 @@ mop_read_file_signature
     if (handle == INVALID_HANDLE_VALUE)
     {
         mop_s32 error = GetLastError();
-        mop_require(error == ERROR_FILE_NOT_FOUND);
+        mop_require((error == ERROR_FILE_NOT_FOUND) || (error == ERROR_SHARING_VIOLATION));
 
         return mop_sl(mop_read_file_result) {0};
     }
@@ -972,7 +987,7 @@ mop_atomic_add_s64_signature
 
 mop_atomic_compare_exchange_s32_signature
 {
-    return InterlockedCompareExchange(value, new_value, expected_value);
+    return (mop_s32) InterlockedCompareExchange((LONG *) value, (LONG) new_value, (LONG) expected_value);
 }
 
 mop_load_library_signature
@@ -1158,20 +1173,28 @@ mop_key_poll_update_signature
         mop_key_event_update(platform, key, is_active);
 }
 
+mop_key_state_was_pressed_signature
+{    
+    return state.half_transition_overflow || (state.half_transition_count >= 2 - state.is_active);
+}
+
+mop_key_state_was_released_signature
+{    
+    return state.half_transition_overflow || (state.half_transition_count >= 1 + state.is_active);
+}
+
 mop_key_was_pressed_signature
 {
     mop_assert(key < mop_carray_count(platform->keys));
     mop_key_state state = platform->keys[key];
-
-    return state.half_transition_overflow || (state.half_transition_count >= 2 - state.is_active);
+    return mop_key_state_was_pressed(state);
 }
 
 mop_key_was_released_signature
 {
     mop_assert(key < mop_carray_count(platform->keys));
     mop_key_state state = platform->keys[key];
-
-    return state.half_transition_overflow || (state.half_transition_count >= 1 + state.is_active);
+    return mop_key_state_was_released(state);
 }
 
 #endif

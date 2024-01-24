@@ -151,6 +151,18 @@ typedef struct
     moui_f32 a;
 } moui_rgba;
 
+typedef union
+{
+    struct {
+        moui_u8 r;
+        moui_u8 g;
+        moui_u8 b;
+        moui_u8 a;
+    };
+
+    moui_u32 value;
+} moui_rgba8;
+
 typedef struct
 {
     moui_vec2 position;
@@ -265,6 +277,12 @@ typedef struct
     moui_vec2 alignment;
     moui_u32  quad_offset;
 } moui_aligned_state;
+
+typedef struct
+{
+    moui_box2 used_box;
+    moui_vec2 offset;
+} moui_aligned_state_result;
 
 typedef enum
 {
@@ -413,7 +431,7 @@ moui_scissor_signature;
 #define moui_aligned_box_begin_signature moui_aligned_state moui_aligned_box_begin(moui_state *state, moui_vec2 alignment_point, moui_vec2 alignment)
 moui_aligned_box_begin_signature;
 
-#define moui_aligned_box_end_signature moui_box2 moui_aligned_box_end(moui_state *state, moui_aligned_state aligned_state)
+#define moui_aligned_box_end_signature moui_aligned_state_result moui_aligned_box_end(moui_state *state, moui_aligned_state aligned_state)
 moui_aligned_box_end_signature;
 
 #define moui_used_box_begin_signature moui_box2 moui_used_box_begin(moui_state *state)
@@ -433,6 +451,12 @@ moui_add_quad_signature;
 
 #define moui_premultiply_alpha_signature moui_rgba moui_premultiply_alpha(moui_rgba color)
 moui_premultiply_alpha_signature;
+
+#define moui_blend_premultiplied_alpha_signature moui_rgba moui_blend_premultiplied_alpha(moui_rgba destination, moui_rgba source)
+moui_blend_premultiplied_alpha_signature;
+
+#define moui_to_rgba8_signature moui_rgba8 moui_to_rgba8(moui_rgba color)
+moui_to_rgba8_signature;
 
 #define moui_to_quad_colors_signature moui_quad_colors moui_to_quad_colors(moui_rgba color)
 moui_to_quad_colors_signature;
@@ -479,6 +503,9 @@ moui_print_text_iterator_signature;
 #define moui_print_signature void moui_print(moui_state *state, moui_simple_font font, moui_s32 layer, moui_rgba color, moui_text_cursor *cursor, moui_string text)
 moui_print_signature;
 
+#define moui_print_va_signature void moui_print_va(moui_state *state, moui_simple_font font, moui_s32 layer, moui_rgba color, moui_text_cursor *cursor, moui_cstring format, va_list arguments)
+moui_print_va_signature;
+
 #define moui_printf_signature void moui_printf(moui_state *state, moui_simple_font font, moui_s32 layer, moui_rgba color, moui_text_cursor *cursor, moui_cstring format, ...)
 moui_printf_signature;
 
@@ -512,7 +539,7 @@ moui_default_window_init_signature;
 #define moui_default_render_begin_signature void moui_default_render_begin(moui_default_state *default_state, moui_default_window *window)
 moui_default_render_begin_signature;
 
-#define moui_default_render_prepare_execute_signature void moui_default_render_prepare_execute(moui_default_state *default_state)
+#define moui_default_render_prepare_execute_signature void moui_default_render_prepare_execute(moui_default_state *default_state, moui_box2 viewport)
 moui_default_render_prepare_execute_signature;
 
 #define moui_default_render_end_signature void moui_default_render_end(moui_default_state *default_state, moui_default_window *window, moui_b8 wait_for_vsync)
@@ -571,6 +598,9 @@ moui_gl_load_font_signature;
 
 #define moui_load_font_file_signature moui_simple_font moui_load_font_file(mop_platform *platform, moma_arena *arena, moui_string path, moui_s32 texture_width, moui_s32 texture_height, moui_s32 height, moui_u32 first_character, moui_u32 character_count)
 moui_load_font_file_signature;
+
+#define moui_load_outlined_font_file_signature moui_simple_font moui_load_outlined_font_file(mop_platform *platform, moma_arena *arena, moui_string path, moui_s32 texture_width, moui_s32 texture_height, moui_s32 height, moui_u32 first_character, moui_u32 character_count, moui_s32 thickness, moui_rgba inner_color, moui_rgba outline_color)
+moui_load_outlined_font_file_signature;
 
 #endif
 
@@ -1424,8 +1454,10 @@ moui_default_init_signature
 
 moui_default_render_prepare_execute_signature
 {
-    moui_gl_check(glViewport(0, 0, default_state->base.renderer.canvas_size.x, default_state->base.renderer.canvas_size.y));
-    moui_gl_check(glScissor(0,  0, default_state->base.renderer.canvas_size.x, default_state->base.renderer.canvas_size.y));
+    f32 width  = viewport.max.x - viewport.min.x;
+    f32 height = viewport.max.y - viewport.min.y;
+    moui_gl_check(glViewport(viewport.min.x, viewport.min.y, width, height));
+    moui_gl_check(glScissor(viewport.min.x, viewport.min.y, width, height));
 
     moui_gl_check(glClearColor(0, 0, 0, 1));
     moui_gl_check(glClear(GL_COLOR_BUFFER_BIT));
@@ -1870,7 +1902,7 @@ moui_aligned_box_end_signature
     used_box.max.x += offset.x;
     used_box.max.y += offset.y;
 
-    return used_box;
+    return moui_sl(moui_aligned_state_result) { used_box, offset };
 }
 
 moui_used_box_begin_signature
@@ -1971,6 +2003,27 @@ moui_premultiply_alpha_signature
     color.g *= color.a;
     color.b *= color.a;
     return color;
+}
+
+moui_blend_premultiplied_alpha_signature
+{
+    moui_f32 one_minus_source_alpha = 1 - source.a;
+
+    source.r += destination.r * one_minus_source_alpha;
+    source.g += destination.g * one_minus_source_alpha;
+    source.b += destination.b * one_minus_source_alpha;
+    source.a += destination.a * one_minus_source_alpha;
+    return source;
+}
+
+moui_to_rgba8_signature
+{
+    moui_rgba8 result;
+    result.r = (moui_u8) (color.r * 255);
+    result.g = (moui_u8) (color.g * 255);
+    result.b = (moui_u8) (color.b * 255);
+    result.a = (moui_u8) (color.a * 255);
+    return result;
 }
 
 moui_to_quad_colors_signature
@@ -2554,13 +2607,22 @@ moui_print_text_iterator_signature
     }
 }
 
+moui_print_va_signature
+{
+    char text_buffer[1024]; // TODO: could be configurable
+    moui_s32 count = vsnprintf(text_buffer, moui_carray_count(text_buffer), format, arguments);
+    moui_print(state, font, layer, color, cursor, moui_sl(moui_string) { (moui_u8 *) text_buffer, (moui_usize) count });
+}
+
 moui_printf_signature
 {
     va_list arguments;
     va_start(arguments, format);
+
     char text_buffer[1024]; // TODO: could be configurable
     moui_s32 count = vsnprintf(text_buffer, moui_carray_count(text_buffer), format, arguments);
-    moui_print(state, font, layer, color, cursor, moui_sl(moui_string) { (moui_u8 *) text_buffer, (moui_usize) count });
+    moui_print_va(state, font, layer, color, cursor, format, arguments);
+
     va_end(arguments);
 }
 
@@ -2747,7 +2809,6 @@ moui_load_font_file_signature
     font.texture.width  = texture_width;
     font.texture.height = texture_height;
 
-
     mop_get_file_byte_count_result file_byte_count_result = mop_get_file_byte_count(platform, path);
     moui_assert(file_byte_count_result.ok);
 
@@ -2777,13 +2838,13 @@ moui_load_font_file_signature
         font.line_spacing   = font.line_height + line_gap * scale;
     }
 
-    u8 *texture_buffer = moma_allocate_bytes(arena, font.texture.width * font.texture.height, 1);
+    moui_u8 *texture_buffer = moma_allocate_bytes(arena, font.texture.width * font.texture.height, 1);
     stbtt_BakeFontBitmap(result.data.base, 0, font.height, texture_buffer, font.texture.width, font.texture.height, first_character, font.glyph_count, chars);
 
     // lame: flip texture
-    for (s32 y = 0; y < (font.texture.height + 1)/ 2; y++)
+    for (moui_s32 y = 0; y < (font.texture.height + 1)/ 2; y++)
     {
-        for (s32 x = 0; x < font.texture.width; x++)
+        for (moui_s32 x = 0; x < font.texture.width; x++)
         {
             u8 alpha = texture_buffer[y * font.texture.width + x];
             texture_buffer[y * font.texture.width + x] = texture_buffer[(font.texture.height - 1 - y) * font.texture.width + x];
@@ -2791,7 +2852,7 @@ moui_load_font_file_signature
         }
     }
 
-    for (u32 i = 0; i < font.glyph_count; i++)
+    for (moui_u32 i = 0; i < font.glyph_count; i++)
     {
         moui_font_glyph *glyph = &font.glyphs[i];
         glyph->code = first_character + i;
@@ -2805,6 +2866,132 @@ moui_load_font_file_signature
     }
 
     font.texture = moui_create_texture(font.texture.width, font.texture.height, texture_buffer, moui_true, moui_false);
+
+    moma_reset(arena, read_file_buffer.base);
+
+    return font;
+}
+
+moui_load_outlined_font_file_signature
+{
+    moui_simple_font font = {0};
+    font.height = height;
+
+    font.glyph_count = character_count;
+    font.glyphs = moma_allocate_array(arena, moui_font_glyph, font.glyph_count);
+    font.texture.width  = texture_width;
+    font.texture.height = texture_height;
+
+    mop_get_file_byte_count_result file_byte_count_result = mop_get_file_byte_count(platform, path);
+    moui_assert(file_byte_count_result.ok);
+
+    mop_u8_array read_file_buffer;
+    read_file_buffer.count = file_byte_count_result.byte_count;
+    read_file_buffer.base = moma_allocate_bytes(arena, read_file_buffer.count, 1);
+
+    mop_read_file_result result = mop_read_file(platform, read_file_buffer, path);
+    moui_assert(result.ok);
+
+    stbtt_fontinfo font_info;
+    moui_b8 ok = stbtt_InitFont(&font_info, result.data.base, 0);
+    moui_assert(ok);
+
+    moui_s32 ascent;
+    moui_s32 decent;
+    moui_s32 line_gap;
+    stbtt_GetFontVMetrics(&font_info, &ascent, &decent, &line_gap);
+    moui_f32 scale = stbtt_ScaleForPixelHeight(&font_info, height);
+
+#if 0
+    font.bottom_to_line = 0; // -decent * scale;
+    font.line_to_top    = 0; // ascent * scale;
+    font.line_height    = 0; // font.bottom_to_line + font.line_to_top;
+#else
+    font.bottom_to_line = -decent * scale + thickness;
+    font.line_to_top    = ascent * scale + thickness;
+    font.line_height    = font.bottom_to_line + font.line_to_top;
+#endif
+
+    moui_rgba8 *texture_buffer = moma_allocate_array(arena, moui_rgba8, font.texture.width * font.texture.height);
+    memset(texture_buffer, 0, font.texture.width * font.texture.height * sizeof(moui_rgba8));
+
+    moui_s32 onedge_value = 128;
+    moui_s32 padding = thickness + 2;
+    moui_f32 pixel_dist_scale = (moui_f32) onedge_value / padding;
+
+    moui_f32 inner_value = (onedge_value - pixel_dist_scale * 0) / 255.0f;
+    moui_f32 outline_value = (onedge_value + pixel_dist_scale * thickness) / 255.0f;
+
+    moui_s32 x = 0;
+    moui_s32 y = 0;
+    moui_s32 row_height = 0;
+
+    for (moui_u32 i = 0; i < font.glyph_count; i++)
+    {
+        moui_s32 width = 0, height = 0, xoff = 0, yoff = 0;
+        moui_u8 *sdf = stbtt_GetCodepointSDF(&font_info, scale, first_character + i, padding, onedge_value, pixel_dist_scale, &width, &height, &xoff, &yoff);
+
+        moui_s32 x_advance = 0, ignored;
+        stbtt_GetCodepointHMetrics(&font_info, first_character + i, &x_advance, &ignored);
+
+        if (x + width > texture_width)
+        {
+            assert(width <= texture_width);
+
+            x = 0;
+            y += row_height;
+            row_height = 0;
+
+            assert(y + height <= texture_height);
+        }
+
+        moui_font_glyph *glyph = &font.glyphs[i];
+        glyph->code = first_character + i;
+        glyph->texture_box.min.x = x;
+        glyph->texture_box.max.x = x + width;
+        glyph->texture_box.min.y = y;
+        glyph->texture_box.max.y = y + height;
+        glyph->offset.x = xoff;
+        glyph->offset.y = -height - yoff;
+        glyph->x_advance = ceilf(x_advance * scale) + thickness; //  + 2 * thickness;
+
+        //font.bottom_to_line = max(font.bottom_to_line, max(0, -glyph->offset.y));
+        //font.line_to_top    = max(font.line_to_top, max(0, height + glyph->offset.y));
+
+        for (moui_s32 dy = 0; dy < height; dy++)
+        {
+            for (moui_s32 dx = 0; dx < width; dx++)
+            {
+                moui_f32 distance = (onedge_value - sdf[(height - 1 - dy) * width + dx]) * 2 * padding / 255.0f;
+                moui_f32 outline_alpha = min(1, max(0, thickness - distance));
+                moui_f32 inner_alpha   = 1 - min(1, max(0, distance));
+
+                moui_rgba outline = outline_color;
+                outline.a *= outline_alpha;
+                outline = moui_premultiply_alpha(outline);
+
+                moui_rgba inner = inner_color;
+                inner.a *= inner_alpha;
+                inner = moui_premultiply_alpha(inner);
+
+                moui_rgba color = moui_blend_premultiplied_alpha(outline, inner);
+                texture_buffer[(y + dy) * texture_width + (x + dx)] = moui_to_rgba8(color);
+            }
+
+            //printf("\n");
+        }
+
+        x += width;
+        row_height = max(row_height, height);
+
+        //if (i)
+            //break;
+    }
+
+    //font.line_height  = font.bottom_to_line + font.line_to_top;
+    font.line_spacing = font.line_height + line_gap * scale;
+
+    font.texture = moui_create_texture(font.texture.width, font.texture.height, (moui_u8 *) texture_buffer, moui_false, moui_false);
 
     moma_reset(arena, read_file_buffer.base);
 
