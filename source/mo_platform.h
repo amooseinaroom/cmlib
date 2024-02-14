@@ -234,13 +234,6 @@ mop_load_symbol_signature;
 #define mop_hot_update_type(name) mop_b8 name(mop_platform *platform, mop_u8_array data, mop_b8 did_reload)
 typedef mop_hot_update_type((*mop_hot_update_function));
 
-const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
-#ifdef __cplusplus
-#define mop_hot_update_signature extern "C" __declspec(dllexport) mop_hot_update_type(mop_hot_update)
-#else
-#define mop_hot_update_signature __declspec(dllexport) mop_hot_update_type(mop_hot_update)
-#endif
-
 #define mop_hot_reload_signature mop_b8 mop_hot_reload(mop_platform *platform, mop_hot_reload_state *state, mop_string name)
 
 #define mop_key_state_was_pressed_signature mop_b8 mop_key_state_was_pressed(mop_key_state state)
