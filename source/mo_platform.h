@@ -236,7 +236,7 @@ mop_key_poll_update_signature;
 #if defined mop_debug
 // TODO: create proper message box
 #include <stdio.h>
-#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); __debugbreak(); }
+#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); if (IsDebuggerPresent) __debugbreak(); else ExitProcess(0); }
 #else
 #define mop_assert(x)
 #endif
@@ -265,12 +265,19 @@ enum mop_key
     mop_key_backspace = VK_BACK,
     mop_key_escape = VK_ESCAPE,
     mop_key_delete = VK_DELETE,
+
     mop_key_mouse_left = VK_LBUTTON,
     mop_key_mouse_middle = VK_MBUTTON,
     mop_key_mouse_right = VK_RBUTTON,
+
     mop_key_shift = VK_SHIFT,
     mop_key_control = VK_CONTROL,
+
+    mop_key_plus = VK_OEM_PLUS,
+    mop_key_minus = VK_OEM_MINUS,
+
     mop_key_f0 = VK_F1 - 1,
+
 };
 
 struct mop_platform
