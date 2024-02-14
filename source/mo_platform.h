@@ -235,7 +235,11 @@ mop_load_symbol_signature;
 typedef mop_hot_update_type((*mop_hot_update_function));
 
 const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
+#ifdef __cplusplus
 #define mop_hot_update_signature extern "C" __declspec(dllexport) mop_hot_update_type(mop_hot_update)
+#else
+#define mop_hot_update_signature __declspec(dllexport) mop_hot_update_type(mop_hot_update)
+#endif
 
 #define mop_hot_reload_signature mop_b8 mop_hot_reload(mop_platform *platform, mop_hot_reload_state *state, mop_string name)
 
@@ -307,16 +311,16 @@ enum mop_key
     mop_key_backspace = VK_BACK,
     mop_key_escape = VK_ESCAPE,
     mop_key_delete = VK_DELETE,
-    
+
     mop_key_mouse_left = VK_LBUTTON,
     mop_key_mouse_middle = VK_MBUTTON,
     mop_key_mouse_right = VK_RBUTTON,
-    
+
     mop_key_left  = VK_LEFT,
     mop_key_right = VK_RIGHT,
     mop_key_down  = VK_DOWN,
     mop_key_up    = VK_UP,
-    
+
     mop_key_control = VK_CONTROL,
     mop_key_f0 = VK_F1 - 1,
 };
@@ -586,7 +590,7 @@ mop_handle_messages_signature
                         mop_win32_add_character(platform, msg.wParam, mop_false, with_shift, with_alt, with_control);
                 }
             }
-            
+
             if (!(msg.lParam & (1 << 30)))
                 mop_key_event_update(platform, msg.wParam, mop_true);
         } break;
@@ -1174,12 +1178,12 @@ mop_key_poll_update_signature
 }
 
 mop_key_state_was_pressed_signature
-{    
+{
     return state.half_transition_overflow || (state.half_transition_count >= 2 - state.is_active);
 }
 
 mop_key_state_was_released_signature
-{    
+{
     return state.half_transition_overflow || (state.half_transition_count >= 1 + state.is_active);
 }
 
