@@ -19,11 +19,13 @@ extern "C" {
 #define mote_assert(x) assert(x)
 #define moui_assert(x) assert(x)
 #define moma_assert(x) assert(x)
+#define moa_assert(x)  assert(x)
 
 #define mos_require(x)  require(x)
 #define mote_require(x) require(x)
 #define moui_require(x) require(x)
 #define moma_require(x) require(x)
+#define moa_require(x)  require(x)
 
 typedef unsigned char      u8;
 typedef unsigned short     u16;
@@ -68,10 +70,13 @@ array_type(u8_array, u8);
 #define mote_u8_array_type u8_array
 #define moui_u8_array_type u8_array
 #define moma_u8_array_type u8_array
+#define moa_u8_array_type  u8_array
 
-#define box2 moui_box2
-#define vec2 moui_vec2
-#define rgba moui_rgba
+// HACK:
+#define box2  moui_box2
+#define vec2  moui_vec2
+#define rgba  moui_rgba
+#define rgba8 moui_rgba8
 
 typedef u8_array string;
 

@@ -82,6 +82,9 @@ typedef struct
 #define moma_allocate_array(arena, type, count) ((type *) moma_allocate_bytes(arena, sizeof(type) * (count), moma_aling_of(type)))
 #define moma_free(arena, item_or_array_base)              moma_reset(arena, (moma_u8 *) (item_or_array_base))
 
+#define moma_clear_signature void moma_clear(moma_arena *arena)
+moma_clear_signature;
+
 #define moma_allocate_bytes_signature moma_u8 * moma_allocate_bytes(moma_arena *arena, moma_usize byte_count, moma_u32 byte_alignment)
 moma_allocate_bytes_signature;
 
@@ -96,6 +99,9 @@ moma_create_signature;
 #define moma_destroy_signature void moma_destroy(moma_arena *arena, mop_platform *platform)
 moma_destroy_signature;
 
+#define moma_read_file_signature mop_read_file_result moma_read_file(mop_platform *platform, moma_arena *memory, mop_string path)
+moma_read_file_signature;
+
 #endif
 
 #ifdef __cplusplus
@@ -106,6 +112,11 @@ moma_destroy_signature;
 
 #if defined moma_implementation
 #undef moma_implementation
+
+moma_clear_signature
+{
+    arena->used_count = 0;
+}
 
 moma_allocate_bytes_signature
 {
@@ -148,6 +159,21 @@ moma_create_signature
 moma_destroy_signature
 {
     mop_free(platform, arena->base);
+}
+
+moma_read_file_signature
+{    
+    u8_array data;
+    data.count = memory->count - memory->used_count;
+    data.base  = memory->base + memory->used_count;
+    mop_read_file_result result = mop_read_file(platform, data, path);
+    if (result.ok)
+    {
+        u8 *base = moma_allocate_bytes(memory, result.data.count, 1);
+        assert(base == data.base);
+    }    
+    
+    return result;
 }
 
 #endif
