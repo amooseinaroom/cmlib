@@ -542,7 +542,11 @@ moui_default_window_init_signature;
 #define moui_default_render_begin_signature void moui_default_render_begin(moui_default_state *default_state, moui_default_window *window)
 moui_default_render_begin_signature;
 
-#define moui_default_render_prepare_execute_signature void moui_default_render_prepare_execute(moui_default_state *default_state, moui_box2 viewport)
+#define moui_default_render_prepare_execute_viewport_signature void moui_default_render_prepare_execute_viewport(moui_default_state *default_state, moui_box2 viewport)
+moui_default_render_prepare_execute_viewport_signature;
+
+// same as moui_default_render_prepare_execute_viewport with default viewport
+#define moui_default_render_prepare_execute_signature void moui_default_render_prepare_execute(moui_default_state *default_state)
 moui_default_render_prepare_execute_signature;
 
 #define moui_default_render_end_signature void moui_default_render_end(moui_default_state *default_state, moui_default_window *window, moui_b8 wait_for_vsync)
@@ -1456,7 +1460,7 @@ moui_default_init_signature
     }
 }
 
-moui_default_render_prepare_execute_signature
+moui_default_render_prepare_execute_viewport_signature
 {
     f32 width  = viewport.max.x - viewport.min.x;
     f32 height = viewport.max.y - viewport.min.y;
@@ -1795,7 +1799,7 @@ moui_default_render_end_signature
     moui_assert(0);
 }
 
-moui_default_render_prepare_execute_signature
+moui_default_render_prepare_execute_viewport_signature
 {
     moui_assert(0);
 }
@@ -1806,6 +1810,11 @@ moui_execute_signature
 }
 
 #endif
+
+moui_default_render_prepare_execute_signature
+{
+    moui_default_render_prepare_execute_viewport(default_state, moui_sl(moui_box2) { 0, 0, default_state->base.renderer.canvas_size.x, default_state->base.renderer.canvas_size.y });
+}
 
 moui_set_buffers_signature
 {
@@ -1909,7 +1918,7 @@ moui_aligned_box_end_signature
     // instead of moui_used_box_end(state, aligned_state.begin_used_box), since we change the used box before merging
     state->renderer.used_box = moui_box2_merge(aligned_state.begin_used_box, used_box);
 
-    return moui_sl(moui_aligned_result) { used_box, offset };
+    return moui_sl(moui_aligned_state_result) { used_box, offset };
 }
 
 moui_used_box_begin_signature

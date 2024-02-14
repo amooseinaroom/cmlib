@@ -783,6 +783,28 @@ rgba rgba_lerp(rgba a, rgba b, f32 blend)
     };
 }
 
+b8 box2_overlap(box2 a, box2 b)
+{
+    return (a.min.x < b.max.x) && (b.min.x < a.max.x) && (a.min.y < b.max.y) && (b.min.y < a.max.y);
+    //return !((a.min.x >= b.max.x) || (b.min.x >= a.max.x) || (a.min.y >= b.max.y) || (b.min.y >= a.max.y));
+}
+
+box2 box2_grow(box2 box, f32 border)
+{
+    box.min.x -= border;
+    box.max.x += border;
+    box.min.y -= border;
+    box.max.y += border;
+    return box;
+}
+
+box2 box2_move(box2 box, vec2 offset)
+{
+    box.min = vec2_add(box.min, offset);
+    box.max = vec2_add(box.max, offset);
+    return box;
+}
+
 #ifdef __cplusplus
 }
 #endif

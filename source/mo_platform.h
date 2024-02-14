@@ -234,9 +234,6 @@ mop_load_symbol_signature;
 #define mop_hot_update_type(name) mop_b8 name(mop_platform *platform, mop_u8_array data, mop_b8 did_reload)
 typedef mop_hot_update_type((*mop_hot_update_function));
 
-const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
-#define mop_hot_update_signature extern "C" __declspec(dllexport) mop_hot_update_type(mop_hot_update)
-
 #define mop_hot_reload_signature mop_b8 mop_hot_reload(mop_platform *platform, mop_hot_reload_state *state, mop_string name)
 
 #define mop_key_state_was_pressed_signature mop_b8 mop_key_state_was_pressed(mop_key_state state)
@@ -251,8 +248,21 @@ mop_key_was_pressed_signature;
 #define mop_key_was_released_signature mop_b8 mop_key_was_released(mop_platform *platform, mop_u32 key)
 mop_key_was_released_signature;
 
+const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
+
 #ifdef __cplusplus
+
+// in C++ somehow the 'extern "C"' has to be provided extra if we want the function to be exported
+// even though we are already in an 'extern "C"' scope
+#define mop_hot_update_signature extern "C" __declspec(dllexport) mop_hot_update_type(mop_hot_update)
+
 }
+
+#else
+
+// in C, we don't want to add 'extern "C"'
+#define mop_hot_update_signature __declspec(dllexport) mop_hot_update_type(mop_hot_update)
+
 #endif
 
 #endif
@@ -278,7 +288,7 @@ mop_key_poll_update_signature;
 #if defined mop_debug
 // TODO: create proper message box
 #include <stdio.h>
-#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); if (IsDebuggerPresent) __debugbreak(); else ExitProcess(0); }
+#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); if (IsDebuggerPresent()) __debugbreak(); else ExitProcess(0); }
 #else
 #define mop_assert(x)
 #endif
