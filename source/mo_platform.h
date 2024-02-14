@@ -255,8 +255,21 @@ mop_key_was_pressed_signature;
 #define mop_key_was_released_signature mop_b8 mop_key_was_released(mop_platform *platform, mop_u32 key)
 mop_key_was_released_signature;
 
+const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
+
 #ifdef __cplusplus
+
+// in C++ somehow the 'extern "C"' has to be provided extra if we want the function to be exported
+// even though we are already in an 'extern "C"' scope
+#define mop_hot_update_signature extern "C" __declspec(dllexport) mop_hot_update_type(mop_hot_update)
+
 }
+
+#else
+
+// in C, we don't want to add 'extern "C"'
+#define mop_hot_update_signature __declspec(dllexport) mop_hot_update_type(mop_hot_update)
+
 #endif
 
 #endif
@@ -282,7 +295,7 @@ mop_key_poll_update_signature;
 #if defined mop_debug
 // TODO: create proper message box
 #include <stdio.h>
-#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); __debugbreak(); }
+#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); if (IsDebuggerPresent()) __debugbreak(); else ExitProcess(0); }
 #else
 #define mop_assert(x)
 #endif
@@ -322,7 +335,12 @@ enum mop_key
     mop_key_up    = VK_UP,
 
     mop_key_control = VK_CONTROL,
+
+    mop_key_plus = VK_OEM_PLUS,
+    mop_key_minus = VK_OEM_MINUS,
+
     mop_key_f0 = VK_F1 - 1,
+
 };
 
 struct mop_platform

@@ -94,6 +94,9 @@ mote_buffer_to_string_signature;
 #define mote_handle_character_signature mote_b8 mote_handle_character(mote_buffer *text, mote_character character)
 mote_handle_character_signature;
 
+#define mote_insert_signature void mote_insert(mote_buffer *text, mote_u8 code)
+mote_insert_signature;
+
 #ifdef __cplusplus
 }
 #endif
@@ -109,6 +112,16 @@ mote_buffer_to_string_signature
     return result;
 }
 
+mote_insert_signature
+{
+    assert(text->used_count < text->total_count);
+
+    memcpy(text->base + text->cursor + 1, text->base + text->cursor, text->used_count - text->cursor);
+    text->base[text->cursor] = code;
+    text->used_count += 1;
+    text->cursor++;
+}
+
 mote_handle_character_signature
 {
     mote_b8 did_change = mote_false;
@@ -117,12 +130,88 @@ mote_handle_character_signature
     {
         switch (character.code)
         {
+            case mote_character_symbol_left:
+            {
+                if (text->cursor)
+                {
+                    if (text->base[text->cursor - 1] == '\n')
+                    {
+                        text->cursor--;
+
+                        if (text->cursor && (text->base[text->cursor - 1] == '\r'))
+                            text->cursor--;
+                    }
+                    else if (text->base[text->cursor - 1] == '\r')
+                    {
+                        text->cursor--;
+
+                        if (text->cursor && (text->base[text->cursor - 1] == '\n'))
+                            text->cursor--;
+                    }
+                    else
+                    {
+                        text->cursor--;
+                    }
+                }
+            } break;
+
+            case mote_character_symbol_right:
+            {
+                if (text->cursor < text->used_count)
+                {
+                    if (text->cursor < text->used_count)
+                    {
+                        if (text->base[text->cursor] == '\n')
+                        {
+                            text->cursor++;
+
+                            if ((text->cursor < text->used_count) && (text->base[text->cursor] == '\r'))
+                                text->cursor++;
+                        }
+                        else if (text->base[text->cursor] == '\r')
+                        {
+                            text->cursor++;
+
+                            if ((text->cursor < text->used_count) && (text->base[text->cursor] == '\n'))
+                                text->cursor++;
+                        }
+                        else
+                        {
+                            text->cursor++;
+                        }
+                    }
+                }
+            } break;
+
+            case mote_character_symbol_up:
+            {
+
+            } break;
+
+            case mote_character_symbol_down:
+            {
+
+            } break;
+
             case mote_character_symbol_backspace:
             {
-                if (text->used_count)
+                if (text->cursor)
                 {
+                    assert(text->used_count);
                     text->used_count--;
                     text->cursor--;
+                    memcpy(text->base + text->cursor, text->base + text->cursor + 1, text->used_count - text->cursor);
+                    did_change = mote_true;
+                }
+            } break;
+
+            case mote_character_symbol_delete:
+            {
+                if (text->cursor < text->used_count)
+                {
+                    assert(text->used_count);
+                    text->used_count--;
+                    memcpy(text->base + text->cursor, text->base + text->cursor + 1, text->used_count - text->cursor);
                     did_change = mote_true;
                 }
             } break;
@@ -131,9 +220,8 @@ mote_handle_character_signature
             {
                 if (text->used_count < text->total_count)
                 {
-                    text->base[text->used_count] = '\n';
-                    text->used_count++;
-                    text->cursor++;
+                    mote_insert(text, '\n');
+                    did_change = mote_true;
                 }
             } break;
         }
@@ -144,9 +232,7 @@ mote_handle_character_signature
         {
             if (text->used_count < text->total_count)
             {
-                text->base[text->used_count] = (mote_u8) character.code;
-                text->used_count++;
-                text->cursor++;
+                mote_insert(text, (mote_u8) character.code);
                 did_change = mote_true;
             }
         }
