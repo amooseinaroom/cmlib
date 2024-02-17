@@ -116,7 +116,8 @@ int main(int argument_count, char *arguments[])
 
         moui_default_render_begin(&program->ui, &ui_window);
 
-        moui_default_render_prepare_execute(&program->ui, program->ui_letterbox);
+        moui_default_render_prepare_execute_viewport(&program->ui, program->ui_letterbox);
+        // moui_default_render_prepare_execute(&program->ui);
 
         moui_execute(&program->ui.base);
         moui_resize_buffers(&program->ui.base, &program->memory);
