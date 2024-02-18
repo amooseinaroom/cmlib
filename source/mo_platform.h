@@ -242,6 +242,9 @@ mop_key_state_was_pressed_signature;
 #define mop_key_state_was_released_signature mop_b8 mop_key_state_was_released(mop_key_state state)
 mop_key_state_was_released_signature;
 
+#define mop_key_is_active_signature mop_b8 mop_key_is_active(mop_platform *platform, mop_u32 key)
+mop_key_is_active_signature;
+
 #define mop_key_was_pressed_signature mop_b8 mop_key_was_pressed(mop_platform *platform, mop_u32 key)
 mop_key_was_pressed_signature;
 
@@ -328,6 +331,7 @@ enum mop_key
     mop_key_up    = VK_UP,
 
     mop_key_control = VK_CONTROL,
+    mop_key_alt     = VK_MENU,
 
     mop_key_plus = VK_OEM_PLUS,
     mop_key_minus = VK_OEM_MINUS,
@@ -1196,6 +1200,13 @@ mop_key_state_was_pressed_signature
 mop_key_state_was_released_signature
 {
     return state.half_transition_overflow || (state.half_transition_count >= 1 + state.is_active);
+}
+
+mop_key_is_active_signature
+{
+    mop_assert(key < mop_carray_count(platform->keys));
+    mop_key_state state = platform->keys[key];
+    return state.is_active;
 }
 
 mop_key_was_pressed_signature
