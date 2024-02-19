@@ -2657,8 +2657,6 @@ moui_printf_signature
     va_list arguments;
     va_start(arguments, format);
 
-    char text_buffer[1024]; // TODO: could be configurable
-    moui_s32 count = vsnprintf(text_buffer, moui_carray_count(text_buffer), format, arguments);
     moui_print_va(state, font, layer, color, cursor, format, arguments);
 
     va_end(arguments);
