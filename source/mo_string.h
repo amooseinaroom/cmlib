@@ -119,6 +119,12 @@ mos_parse_s64_signature;
 #define mos_parse_f64_signature mos_b8 mos_parse_f64(mos_f64 *result, mos_string *iterator)
 mos_parse_f64_signature;
 
+#define mos_parse_u32_signature mos_b8 mos_parse_u32(mos_u32 *result, mos_string *iterator)
+mos_parse_u32_signature;
+
+#define mos_parse_s32_signature mos_b8 mos_parse_s32(mos_s32 *result, mos_string *iterator)
+mos_parse_s32_signature;
+
 #define mos_parse_f32_signature mos_b8 mos_parse_f32(mos_f32 *result, mos_string *iterator)
 mos_parse_f32_signature;
 
@@ -411,6 +417,24 @@ mos_parse_f64_signature
     *iterator = test_iterator;
 
     return mos_true;
+}
+
+mos_parse_u32_signature
+{
+    mos_u64 value;
+    mos_b8 ok = mos_parse_u64(&value, iterator);
+    *result = (mos_u32) value;
+
+    return (*result == value);
+}
+
+mos_parse_s32_signature
+{
+    mos_s64 value;
+    mos_b8 ok = mos_parse_s64(&value, iterator);
+    *result = (mos_s32) value;
+
+    return (*result == value);
 }
 
 mos_parse_f32_signature
