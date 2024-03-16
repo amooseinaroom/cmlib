@@ -138,9 +138,56 @@ typedef union
     mop_u8 value;
 } mop_key_state;
 
+typedef enum
+{
+    mop_week_day_monday,
+    mop_week_day_thuesday,
+    mop_week_day_wednesday,
+    mop_week_day_thursday,
+    mop_week_day_friday,
+    mop_week_day_saturday,
+    mop_week_day_sunday,
+
+    mop_week_day_count,
+} mop_week_day;
+
+
+typedef enum
+{
+    mop_month_january,
+	mop_month_february,
+	mop_month_march,
+	mop_month_april,
+	mop_month_may,
+	mop_month_june,
+	mop_month_july,
+	mop_month_august,
+	mop_month_september,
+	mop_month_october,
+	mop_month_november,
+    mop_month_december,
+
+    mop_month_count,
+} mop_month;
+
+typedef struct
+{
+    u16 millisecond;
+    u8  second;
+    u8  minute;
+    u8  hour;
+    u8  day;
+    u8  month;
+    u16 year;
+
+    u8 week_day;
+} mop_date_and_time;
+
 typedef enum mop_key mop_key;
 
 struct mop_platform;
+
+extern const mop_u32 mop_month_day_count[12];
 
 #define mop_init_signature void mop_init(mop_platform *platform)
 mop_init_signature;
@@ -156,6 +203,9 @@ mop_handle_messages_signature;
 
 #define mop_get_realtime_counter_signature mop_u64 mop_get_realtime_counter(mop_platform *platform)
 mop_get_realtime_counter_signature;
+
+#define mop_get_local_date_and_time_signature mop_date_and_time mop_get_local_date_and_time(mop_platform *platform)
+mop_get_local_date_and_time_signature;
 
 #define mop_get_file_byte_count_signature mop_get_file_byte_count_result mop_get_file_byte_count(mop_platform *platform, mop_string path)
 mop_get_file_byte_count_signature;
@@ -272,6 +322,22 @@ const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
 
 #if defined mop_implementation
 #undef mop_implementation
+
+const mop_u32 mop_month_day_count[12] =
+{
+    31, // january
+    28, // february
+    31, // march
+    30, // april
+    31, // may
+    30, // june
+    31, // july
+    31, // august
+    30, // september
+    31, // october
+    30, // november
+    31, // december
+};
 
 #define mop_key_event_update_signature void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
 mop_key_event_update_signature;
@@ -648,6 +714,23 @@ mop_get_realtime_counter_signature
     mop_require(QueryPerformanceCounter((LARGE_INTEGER *) &counter));
 
     return counter;
+}
+
+mop_get_local_date_and_time_signature
+{
+    SYSTEMTIME local_time;
+    GetLocalTime(&local_time);
+
+    mop_date_and_time result;
+    result.millisecond = local_time.wMilliseconds;
+    result.second      = local_time.wSecond;
+    result.minute      = local_time.wMinute;
+    result.hour        = local_time.wHour;
+    result.day         = local_time.wDay;
+    result.month       = local_time.wMonth - 1;
+    result.year        = local_time.wYear;
+    result.week_day    = (local_time.wDayOfWeek + mop_week_day_count - 1) % mop_week_day_count;
+    return result;
 }
 
 void mop_win32_to_cpath(mop_u8 cpath[MAX_PATH], mop_string path)

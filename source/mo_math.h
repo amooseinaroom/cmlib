@@ -167,6 +167,11 @@ vec2 vec2_floor(vec2 vector)
     return sl(vec2) { floorf(vector.x), floorf(vector.y) };
 }
 
+vec2 vec2_ceil(vec2 vector)
+{
+    return sl(vec2) { ceilf(vector.x), ceilf(vector.y) };
+}
+
 vec2 vec2_lerp(vec2 a, vec2 b, f32 blend)
 {
     return vec2_add(vec2_scale(a, 1 - blend), vec2_scale(b, blend));
