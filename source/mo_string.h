@@ -71,8 +71,29 @@ typedef struct
     mos_u32 total_count;
 } mos_string_buffer;
 
+typedef struct
+{
+    mos_u32 utf32_code;
+    mos_u32 byte_count;
+} mos_utf8_result;
+
+typedef struct
+{
+    mos_u8  base[4];
+    mos_u32 count;
+} mos_utf8_encoding;
+
 #include <stdarg.h>
 #include <stdio.h>
+
+#define mos_utf8_advance_signature mos_utf8_result mos_utf8_advance(mos_string *iterator)
+mos_utf8_advance_signature;
+
+#define mos_utf8_previous_signature mos_utf8_result mos_utf8_previous(mos_string text, mos_usize byte_offset)
+mos_utf8_previous_signature;
+
+#define mos_encode_utf8_signature mos_utf8_encoding mos_encode_utf8(mos_u32 utf32_code)
+mos_encode_utf8_signature;
 
 #define mos_advance_signature void mos_advance(mos_string *text, mos_usize count)
 mos_advance_signature;
@@ -476,6 +497,99 @@ mos_write_signature
 
     return result;
 }
+
+mos_utf8_advance_signature
+{
+    mos_assert(iterator->count);
+
+    mos_u8 head = iterator->base[0];
+    if (head <= 0x7F)
+    {
+        mos_advance(iterator, 1);
+        return mos_struct_literal(mos_utf8_result) { head, 1 };
+    }
+
+    mos_u32 byte_count = 4;
+    mos_u8  mask = 0xF0;
+    while ((head & mask) != mask)
+    {
+        mask <<= 1;
+        byte_count -= 1;
+    }
+
+    mos_assert(byte_count > 1);
+    mos_assert(byte_count <= iterator->count);
+
+    mos_u32 code = (head & ~mask) << (6 * (byte_count - 1));
+    for (u32 i= 1; i < byte_count; i++)
+        code |= (iterator->base[i] & ~0x80) << (6 * (byte_count - i - 1));
+
+    mos_advance(iterator, byte_count);
+
+    return mos_struct_literal(mos_utf8_result) { code, byte_count };
+}
+
+mos_utf8_previous_signature
+{
+    mos_assert(byte_offset > 0);
+    mos_assert(byte_offset <= text.count);
+
+    mos_u32 byte_count = 1;
+    while ((text.base[byte_offset - byte_count] & 0xC0) == 0x80)
+    {
+        mos_assert(byte_count < 4);
+        mos_assert(byte_count < byte_offset);
+        byte_count += 1;
+    }
+
+    string previous = { text.base + byte_offset - byte_count, byte_count };
+    mos_utf8_result result = mos_utf8_advance(&previous);
+    mos_assert(result.byte_count == byte_count);
+
+    return result;
+}
+
+mos_encode_utf8_signature
+{
+    mos_utf8_encoding result;
+
+    if (utf32_code <= 0x7F)
+    {
+       result.count   = 1;
+       result.base[0] = utf32_code;
+       return result;
+    }
+
+    if (utf32_code <= 0x7FF)
+    {
+        result.count   = 2;
+        result.base[0] = 0xC0 | (utf32_code >> 6);            /* 110xxxxx */
+        result.base[1] = 0x80 | (utf32_code & 0x3F);          /* 10xxxxxx */
+        return result;
+    }
+
+    if (utf32_code <= 0xFFFF)
+    {
+        result.count   = 3;
+        result.base[1] = 0xE0 | (utf32_code >> 12);           /* 1110xxxx */
+        result.base[2] = 0x80 | ((utf32_code >> 6) & 0x3F);   /* 10xxxxxx */
+        result.base[3] = 0x80 | (utf32_code & 0x3F);          /* 10xxxxxx */
+        return result;
+    }
+
+    if (utf32_code <= 0x10FFFF)
+    {
+        result.count   = 4;
+        result.base[0] = 0xF0 | (utf32_code >> 18);           /* 11110xxx */
+        result.base[1] = 0x80 | ((utf32_code >> 12) & 0x3F);  /* 10xxxxxx */
+        result.base[2] = 0x80 | ((utf32_code >> 6) & 0x3F);   /* 10xxxxxx */
+        result.base[3] = 0x80 | (utf32_code & 0x3F);          /* 10xxxxxx */
+        return result;
+    }
+
+    mos_assert(0);
+    return mos_struct_literal(mos_utf8_endocing) {0};
+ }
 
 #if defined(_WIN32) || defined(WIN32)
 

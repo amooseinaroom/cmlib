@@ -208,6 +208,8 @@ typedef struct
     moui_usize      glyph_count;
     moui_s32        height;
     moui_s32        line_spacing;
+    moui_s32        left_margin;
+    moui_s32        right_margin;
     moui_s32        bottom_to_line;
     moui_s32        line_to_top;
     moui_s32        line_height;
@@ -2794,6 +2796,8 @@ moui_load_font_signature
 
     font->bottom_to_line = 0;
     font->line_to_top    = 0;
+    font->left_margin    = 0;
+    font->right_margin   = 0;
     for (u32 i = 0; i < font->glyph_count; i++)
     {
         moui_font_glyph *glyph = &font->glyphs[i];
@@ -2809,6 +2813,10 @@ moui_load_font_signature
         s32 height = glyph->texture_box.max.y - glyph->texture_box.min.y;
         font->bottom_to_line = max(font->bottom_to_line, glyph->offset.y + height);
         font->line_to_top    = max(font->line_to_top, -glyph->offset.y);
+
+        s32 width = glyph->texture_box.max.x - glyph->texture_box.min.x;
+        font->left_margin  = max(font->left_margin,  -glyph->offset.x);
+        font->right_margin = max(font->right_margin, glyph->offset.x + width);
     }
 
     return result_texture;

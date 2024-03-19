@@ -115,11 +115,26 @@ typedef struct
 typedef struct
 {
     mop_u32 code;
-    mop_b8 is_symbol   : 1;
-    mop_b8 with_shift  : 1;
-    mop_b8 with_alt    : 1;
-    mop_b8 with_control: 1;
+
+    union
+    {
+        struct
+        {
+            mop_b8 is_symbol    : 1;
+            mop_b8 with_shift   : 1;
+            mop_b8 with_alt     : 1;
+            mop_b8 with_control : 1;
+        };
+
+        u8 mask;
+    };
 } mop_character;
+
+typedef struct
+{
+    mop_character *base;
+    mop_usize     count;
+} mop_character_array;
 
 enum mop_character_symbol;
 typedef enum mop_character_symbol mop_character_symbol;
@@ -150,7 +165,6 @@ typedef enum
 
     mop_week_day_count,
 } mop_week_day;
-
 
 typedef enum
 {
@@ -200,6 +214,9 @@ mop_window_get_info_signature;
 
 #define mop_handle_messages_signature void mop_handle_messages(mop_platform *platform)
 mop_handle_messages_signature;
+
+#define mop_get_characters_signature mop_character_array mop_get_characters(mop_platform *platform)
+mop_get_characters_signature;
 
 #define mop_get_realtime_counter_signature mop_u64 mop_get_realtime_counter(mop_platform *platform)
 mop_get_realtime_counter_signature;
@@ -370,14 +387,24 @@ mop_key_poll_update_signature;
 
 enum mop_character_symbol
 {
-    mop_character_symbol_backspace,
     mop_character_symbol_escape,
+
+    mop_character_symbol_backspace,
     mop_character_symbol_delete,
     mop_character_symbol_return,
+
+    mop_character_symbol_tabulator,
+
     mop_character_symbol_left,
     mop_character_symbol_right,
     mop_character_symbol_up,
     mop_character_symbol_down,
+
+    mop_character_symbol_home,
+    mop_character_symbol_end,
+
+    mop_character_symbol_page_up,
+    mop_character_symbol_page_down,
 };
 
 enum mop_key
@@ -645,6 +672,11 @@ mop_handle_messages_signature
                     mop_win32_add_character(platform, mop_character_symbol_return, mop_true, with_shift, with_alt, with_control);
                 } break;
 
+                case VK_TAB:
+                {
+                    mop_win32_add_character(platform, mop_character_symbol_tabulator, mop_true, with_shift, with_alt, with_control);
+                } break;
+
                 case VK_LEFT:
                 {
                     mop_win32_add_character(platform, mop_character_symbol_left, mop_true, with_shift, with_alt, with_control);
@@ -663,6 +695,26 @@ mop_handle_messages_signature
                 case VK_UP:
                 {
                     mop_win32_add_character(platform, mop_character_symbol_up, mop_true, with_shift, with_alt, with_control);
+                } break;
+
+                case VK_HOME:
+                {
+                    mop_win32_add_character(platform, mop_character_symbol_home, mop_true, with_shift, with_alt, with_control);
+                } break;
+
+                case VK_END:
+                {
+                    mop_win32_add_character(platform, mop_character_symbol_end, mop_true, with_shift, with_alt, with_control);
+                } break;
+
+                case VK_PRIOR:
+                {
+                    mop_win32_add_character(platform, mop_character_symbol_page_up, mop_true, with_shift, with_alt, with_control);
+                } break;
+
+                case VK_NEXT:
+                {
+                    mop_win32_add_character(platform, mop_character_symbol_page_down, mop_true, with_shift, with_alt, with_control);
                 } break;
 
                 default:
@@ -706,6 +758,15 @@ mop_handle_messages_signature
     mop_u64 realtime_counter = mop_get_realtime_counter(platform);
     platform->delta_seconds = (mop_f32) (realtime_counter - platform->last_realtime_counter) / platform->realtime_counter_ticks_per_second;
     platform->last_realtime_counter = realtime_counter;
+}
+
+mop_get_characters_signature
+{
+    mop_character_array characters;
+    characters.count = platform->character_count;
+    characters.base  = platform->characters;
+
+    return characters;
 }
 
 mop_get_realtime_counter_signature
