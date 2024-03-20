@@ -110,6 +110,8 @@ typedef struct
     mop_u8     buffer[512];
     mop_string filepath;
     mop_b8     is_directory;
+    mop_b8     is_search_directory;
+    mop_b8     is_parent_directory;
 } mop_file_search_result;
 
 typedef struct
@@ -966,12 +968,14 @@ mop_normalize_path_signature
 
 mop_file_search_init_signature
 {
-    mop_file_search_iterator file_iterator;
+    mop_file_search_iterator file_iterator = {0};
     mop_win32_to_cpath(file_iterator.win32.cdirectory_path, directory_path);
 
     mop_string path = mop_sl(mop_string) { file_iterator.win32.cdirectory_path, directory_path.count };
     mop_normalize_path(&path);
-    mop_assert(mop_path_is_directory(platform, path));
+
+    if (!mop_path_is_directory(platform, path))
+        return file_iterator;
 
     if (!path.count)
     {
@@ -1014,6 +1018,8 @@ mop_file_search_advance_signature
     if (!file_iterator->win32.handle)
         return mop_false;
 
+    *result = mop_sl(mop_file_search_result) {0};
+
     result->filepath = mop_sl(mop_string) { result->buffer };
     result->is_directory = (file_iterator->win32.find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
@@ -1028,6 +1034,8 @@ mop_file_search_advance_signature
         // remove / from path
         if (result->filepath.count)
             result->filepath.count--;
+
+        result->is_search_directory = true;
     }
     else if (file_iterator->win32.find_data.cFileName[0] == '.' && file_iterator->win32.find_data.cFileName[1] == '.' && file_iterator->win32.find_data.cFileName[2] == 0)
     {
@@ -1055,6 +1063,8 @@ mop_file_search_advance_signature
             if (!found_slash)
                 result->filepath.count = 0;
         }
+
+        result->is_parent_directory = true;
     }
     else
     {

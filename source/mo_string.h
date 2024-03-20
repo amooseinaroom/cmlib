@@ -53,13 +53,13 @@ typedef mos_u8_array_type mos_u8_array;
 typedef mos_u8_array mos_string;
 
 #ifdef __cplusplus
-#define mos_struct_literal(name)
+#define mos_sl(name)
 #else
-#define mos_struct_literal(name) (name)
+#define mos_sl(name) (name)
 #endif
 
-#define mos_s(static_string) mos_struct_literal(mos_string) { (mos_u8 *) static_string, mos_carray_count(static_string) - 1 }
-#define mos_t(base, count)   mos_struct_literal(mos_string) { (mos_u8 *) base, (mos_usize) count }
+#define mos_s(static_string) mos_sl(mos_string) { (mos_u8 *) static_string, mos_carray_count(static_string) - 1 }
+#define mos_t(base, count)   mos_sl(mos_string) { (mos_u8 *) base, (mos_usize) count }
 #define mos_fs(text) (int) (text).count, (char *) (text).base
 
 const mos_string mos_string_empty = {0};
@@ -83,6 +83,13 @@ typedef struct
     mos_u32 count;
 } mos_utf8_encoding;
 
+typedef struct
+{
+    mos_string directory;
+    mos_string name;
+    mos_string extension;
+} mos_split_path_result;
+
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -100,6 +107,12 @@ mos_advance_signature;
 
 #define mos_are_equal_signature mos_b8 mos_are_equal(mos_string a, mos_string b)
 mos_are_equal_signature;
+
+#define mos_substring_signature mos_string mos_substring(mos_string text, mos_usize offset, mos_usize count)
+mos_substring_signature;
+
+#define mos_remaining_substring_signature mos_string mos_remaining_substring(mos_string text, mos_usize offset)
+mos_remaining_substring_signature;
 
 #define mos_set_contains_signature mos_b8 mos_set_contains(mos_string set, mos_u8 symbol)
 mos_set_contains_signature;
@@ -124,6 +137,9 @@ mos_skip_signature;
 
 #define mos_skip_until_pattern_or_end_signature mos_string mos_skip_until_pattern_or_end(mos_string *iterator, mos_string pattern)
 mos_skip_until_pattern_or_end_signature;
+
+#define mos_contains_pattern_signature mos_string mos_contains_pattern(mos_string text, mos_string pattern)
+mos_contains_pattern_signature;
 
 #define mos_parse_u64_ex_signature mos_b8 mos_parse_u64_ex(mos_u64 *result, mos_string *iterator, mos_u8 base)
 mos_parse_u64_ex_signature;
@@ -164,6 +180,9 @@ mos_write_signature;
 #define mos_write_va_signature mos_string mos_write_va(mos_string_buffer *buffer, mos_cstring format, va_list arguments)
 mos_write_va_signature;
 
+#define mos_split_path_signature mos_split_path_result mos_split_path(string path)
+mos_split_path_signature;
+
 #ifdef __cplusplus
 }
 #endif
@@ -193,6 +212,19 @@ mos_are_equal_signature
     }
 
     return mos_true;
+}
+
+mos_substring_signature
+{
+    mos_assert(offset <= text.count);
+    mos_assert(offset + count <= text.count);
+
+    return mos_sl(mos_string) { text.base + offset, count };
+}
+
+mos_remaining_substring_signature
+{
+    return mos_substring(text, offset, text.count - offset);
 }
 
 #if 0
@@ -242,14 +274,14 @@ mos_skip_until_set_or_end_signature
     mos_usize count = 0;
     while (count < iterator->count)
     {
-        mos_string test = mos_struct_literal(mos_string) { iterator->base + count, iterator->count - count };
+        mos_string test = mos_sl(mos_string) { iterator->base + count, iterator->count - count };
         if (mos_skip_set(&test, set))
             break;
 
         count++;
     }
 
-    mos_string result = mos_struct_literal(mos_string) { iterator->base, count };
+    mos_string result = mos_sl(mos_string) { iterator->base, count };
     mos_advance(iterator, count);
 
     return result;
@@ -300,17 +332,46 @@ mos_skip_until_pattern_or_end_signature
     mos_usize count = 0;
     while (count < iterator->count)
     {
-        mos_string test = mos_struct_literal(mos_string) { iterator->base + count, iterator->count - count };
+        mos_string test = mos_sl(mos_string) { iterator->base + count, iterator->count - count };
         if (mos_try_skip(&test, pattern))
             break;
 
         count++;
     }
 
-    mos_string result = mos_struct_literal(mos_string) { iterator->base, count };
+    mos_string result = mos_sl(mos_string) { iterator->base, count };
     mos_advance(iterator, count);
 
     return result;
+}
+
+mos_contains_pattern_signature
+{
+    if (!pattern.count)
+        return mos_sl(mos_string) { text.base, 0 };
+
+    if (text.count < pattern.count)
+        return mos_string_empty;
+
+    for (mos_usize offset = 0; offset < text.count + 1 - pattern.count; offset++)
+    {
+        // inlined compare, since we know count's are equal
+        // mos_are_equal would work as well
+        mos_b8 does_match = mos_true;
+        for (mos_usize i = 0; i < pattern.count; i++)
+        {
+            if (text.base[offset + i] != pattern.base[i])
+            {
+                does_match = mos_false;
+                break;
+            }
+        }
+
+        if (does_match)
+            return mos_sl(mos_string) { text.base + offset, pattern.count };
+    }
+
+    return mos_string_empty;
 }
 
 mos_parse_u64_signature
@@ -506,7 +567,7 @@ mos_utf8_advance_signature
     if (head <= 0x7F)
     {
         mos_advance(iterator, 1);
-        return mos_struct_literal(mos_utf8_result) { head, 1 };
+        return mos_sl(mos_utf8_result) { head, 1 };
     }
 
     mos_u32 byte_count = 4;
@@ -526,7 +587,7 @@ mos_utf8_advance_signature
 
     mos_advance(iterator, byte_count);
 
-    return mos_struct_literal(mos_utf8_result) { code, byte_count };
+    return mos_sl(mos_utf8_result) { code, byte_count };
 }
 
 mos_utf8_previous_signature
@@ -588,8 +649,54 @@ mos_encode_utf8_signature
     }
 
     mos_assert(0);
-    return mos_struct_literal(mos_utf8_endocing) {0};
- }
+    return mos_sl(mos_utf8_endocing) {0};
+}
+
+mos_split_path_signature
+{
+    mos_string directory = { path.base, 0 };
+
+    while (path.count)
+    {
+        mos_usize count = mos_skip_until_pattern_or_end(&path, mos_s("/")).count;
+        if (!count)
+            break;
+
+        if (!mos_try_skip(&path, mos_s("/")))
+        {
+           path.base -= count;
+           path.count += count;
+           break;
+        }
+
+        directory.count += count + 1;
+    }
+
+    // exlude last "/"
+    if (directory.count)
+        directory.count -= 1;
+
+    mos_string name = { path.base, 0 };
+
+    while (path.count)
+    {
+        mos_usize count = mos_skip_until_pattern_or_end(&path, mos_s(".")).count;
+        if (!count)
+            break;
+
+        count += (mos_usize) mos_try_skip(&path, mos_s("."));
+
+        name.count += count;
+    }
+
+    // remove .
+    if (name.count && (name.base[name.count - 1] == '.'))
+        name.count -= 1;
+
+    mos_string extension = path;
+
+    return mos_sl(mos_split_path_result) { directory, name, extension };
+}
 
 #if defined(_WIN32) || defined(WIN32)
 
