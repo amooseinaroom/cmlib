@@ -91,6 +91,7 @@ typedef struct
 {
     mop_point size;
     mop_point relative_mouse_position;
+    b8        requested_close;
 } mop_window_info;
 
 typedef struct
@@ -199,6 +200,12 @@ typedef struct
     u8 week_day;
 } mop_date_and_time;
 
+typedef struct
+{
+    mop_u32 argument_count;
+    mop_u32 text_byte_count;
+} mop_command_line_info;
+
 typedef enum mop_key mop_key;
 
 struct mop_platform;
@@ -213,6 +220,12 @@ mop_window_init_signature;
 
 #define mop_window_get_info_signature mop_window_info mop_window_get_info(mop_platform *platform, mop_window *window)
 mop_window_get_info_signature;
+
+#define mop_get_command_line_info_signature mop_command_line_info mop_get_command_line_info(mop_platform *platform)
+mop_get_command_line_info_signature;
+
+#define mop_get_command_line_arguments_signature mop_u32 mop_get_command_line_arguments(mop_string text_buffer, mop_u32 argument_buffer_count, mop_string *argument_buffer)
+mop_get_command_line_arguments_signature;
 
 #define mop_handle_messages_signature void mop_handle_messages(mop_platform *platform)
 mop_handle_messages_signature;
@@ -300,7 +313,7 @@ mop_unload_library_signature;
 #define mop_load_symbol_signature mop_u8 * mop_load_symbol(mop_platform *platform, mop_library *library, mop_string name)
 mop_load_symbol_signature;
 
-#define mop_hot_update_type(name) mop_b8 name(mop_platform *platform, mop_u8_array data, mop_b8 did_reload)
+#define mop_hot_update_type(name) void name(mop_platform *platform, mop_u8_array data, mop_b8 did_reload)
 typedef mop_hot_update_type((*mop_hot_update_function));
 
 #define mop_hot_reload_signature mop_b8 mop_hot_reload(mop_platform *platform, mop_hot_reload_state *state, mop_string name)
@@ -371,6 +384,7 @@ mop_key_poll_update_signature;
 
 #pragma comment(lib, "gdi32")
 #pragma comment(lib, "user32")
+#pragma comment(lib, "shell32")
 
 #if !defined mop_assert
 #if defined mop_debug
@@ -435,6 +449,12 @@ enum mop_key
 
 };
 
+typedef struct
+{
+    HWND    window_handles[32];
+    mop_u32 count;
+} mop_win32_close_window_requests;
+
 struct mop_platform
 {
     mop_character characters[32];
@@ -442,6 +462,8 @@ struct mop_platform
     mop_u32 missed_character_count;
 
     mop_key_state keys[256];
+
+    mop_win32_close_window_requests close_window_requests;
 
     mop_point previous_mouse_position;
     mop_point mouse_position;
@@ -494,17 +516,38 @@ struct mop_file_search_iterator
     } win32;
 };
 
-mop_cstring mop_win32_window_class_name = "window class";
+const mop_cstring mop_win32_window_class_name = "window class";
+
+mop_win32_close_window_requests mop_win32_global_close_window_requests;
 
 LRESULT CALLBACK mop_win32_window_callback(HWND window_handle, UINT msg, WPARAM w_param, LPARAM l_param)
 {
     switch (msg)
     {
-    case WM_DESTROY:
-    {
-        PostQuitMessage(0);
-        return 0;
-    }
+    // case WM_DESTROY:
+    // {
+    //     PostQuitMessage(0);
+    //     return 0;
+    // }
+
+        // don't destroy the window, since we typically want to react to that request
+        // prevents WM_DESTROY to be called
+        case WM_CLOSE:
+        {
+            // maybe a bit of HACK , but should work with hot code reloading
+            mop_win32_close_window_requests *requests = &mop_win32_global_close_window_requests;
+            mop_assert(requests->count < mop_carray_count(requests->window_handles));
+            requests->window_handles[requests->count] = window_handle;
+            requests->count += 1;
+            return 0;
+        } break;
+
+        // disable beep when pressing alt + ...
+        // since we have no menu shortcuts
+        case WM_MENUCHAR:
+        {
+            return MNC_CLOSE << 16;
+        } break;
     }
 
     return DefWindowProc(window_handle, msg, w_param, l_param);
@@ -548,7 +591,6 @@ mop_window_init_signature
     mop_require(QueryPerformanceFrequency((LARGE_INTEGER *) &platform->realtime_counter_ticks_per_second));
 }
 
-
 mop_window_get_info_signature
 {
     RECT client_rect;
@@ -557,12 +599,21 @@ mop_window_get_info_signature
     POINT window_cursor = platform->win32.cursor;
     ScreenToClient(window->handle, &window_cursor);
 
-    mop_window_info info;
+    mop_window_info info = {0};
     info.size.x = client_rect.right - client_rect.left;
     info.size.y = client_rect.bottom - client_rect.top;
 
     info.relative_mouse_position.x = window_cursor.x;
     info.relative_mouse_position.y = info.size.y - window_cursor.y;
+
+    for (mop_u32 i = 0; i < platform->close_window_requests.count; i++)
+    {
+        if (platform->close_window_requests.window_handles[i] == window->handle)
+        {
+            info.requested_close = true;
+            break;
+        }
+    }
 
     return info;
 }
@@ -586,6 +637,64 @@ void mop_win32_add_character(mop_platform *platform, mop_u32 code, mop_b8 is_sym
     }
 }
 
+mop_get_command_line_info_signature
+{
+    WCHAR *command_line = GetCommandLineW();
+
+    mop_s32 argument_count;
+    WCHAR **arguments = CommandLineToArgvW(command_line, &argument_count);
+    mop_require(arguments);
+
+    mop_s32 text_byte_count = 0;
+    for (mop_s32 i = 0; i < argument_count; i++)
+    {
+        mop_s32 byte_count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, arguments[i], -1, mop_null, 0, mop_null, mop_null);
+        mop_require(byte_count);
+
+        text_byte_count += byte_count - 1; // without null terminal
+    }
+
+    LocalFree(arguments);
+
+    mop_command_line_info info;
+    info.argument_count = argument_count;
+    info.text_byte_count = text_byte_count + 1; // for temporary null terminal returned by WideCharToMultiByte
+
+    return info;
+}
+
+mop_get_command_line_arguments_signature
+{
+    WCHAR *command_line = GetCommandLineW();
+
+    mop_s32 argument_count;
+    WCHAR **arguments = CommandLineToArgvW(command_line, &argument_count);
+    mop_require(arguments);
+
+    mop_assert(argument_count <= argument_buffer_count);
+
+    mop_s32 text_byte_count = 0;
+    for (mop_s32 i = 0; i < argument_count; i++)
+    {
+        mop_s32 byte_count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, arguments[i], -1, (mop_cstring) text_buffer.base, text_buffer.count, mop_null, mop_null);
+        mop_require(byte_count);
+
+        byte_count -= 1; // remove null terminal
+        mop_assert(byte_count <= text_buffer.count);
+
+        argument_buffer[i].base  = text_buffer.base;
+        argument_buffer[i].count = byte_count;
+
+        text_buffer.base  += byte_count;
+        text_buffer.count -= byte_count;
+
+        text_byte_count += byte_count;
+    }
+
+    LocalFree(arguments);
+
+    return argument_count;
+}
 
 mop_handle_messages_signature
 {
@@ -600,6 +709,9 @@ mop_handle_messages_signature
         platform->keys[i].half_transition_count    = 0;
         platform->keys[i].half_transition_overflow = mop_false;
     }
+
+    platform->close_window_requests = mop_win32_global_close_window_requests;
+    mop_win32_global_close_window_requests.count = 0;
 
     mop_b8 with_shift   = (GetAsyncKeyState(VK_SHIFT) >> 15) & 1;
     mop_b8 with_alt     = (GetAsyncKeyState(VK_MENU) >> 15) & 1;
@@ -657,6 +769,11 @@ mop_handle_messages_signature
                 case VK_CONTROL:
                 {
                     with_control = mop_true;
+                } break;
+
+                case VK_ESCAPE:
+                {
+                    mop_win32_add_character(platform, mop_character_symbol_escape, mop_true, with_shift, with_alt, with_control);
                 } break;
 
                 case VK_BACK:

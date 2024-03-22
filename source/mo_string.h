@@ -684,9 +684,14 @@ mos_split_path_signature
         if (!count)
             break;
 
-        count += (mos_usize) mos_try_skip(&path, mos_s("."));
+        if (!mos_try_skip(&path, mos_s(".")))
+        {
+            path.base -= count;
+            path.count += count;
+            break;
+        }
 
-        name.count += count;
+        name.count += count + 1;
     }
 
     // remove .
@@ -698,21 +703,6 @@ mos_split_path_signature
     return mos_sl(mos_split_path_result) { directory, name, extension };
 }
 
-#if defined(_WIN32) || defined(WIN32)
-
-mos_write_va_signature
-{
-    //mos_s32 count = vsprintf_s((char *) buffer->base + buffer->used_count, buffer->total_count - buffer->used_count, format, arguments);
-    mos_s32 count = vsnprintf((char *) buffer->base + buffer->used_count, buffer->total_count - buffer->used_count, format, arguments);
-    mos_assert(count >= 0);
-    mos_string result = { buffer->base + buffer->used_count, (mos_usize) count };
-    buffer->used_count += count;
-
-    return result;
-}
-
-#elif __EMSCRIPTEN__
-
 mos_write_va_signature
 {
     mos_s32 count = vsnprintf((char *) buffer->base + buffer->used_count, buffer->total_count - buffer->used_count, format, arguments);
@@ -722,7 +712,5 @@ mos_write_va_signature
 
     return result;
 }
-
-#endif
 
 #endif
