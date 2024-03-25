@@ -81,6 +81,8 @@ struct mop_library;
 typedef struct mop_hot_reload_state mop_hot_reload_state;
 struct mop_hot_reload_state;
 
+#define mop_path_max_count 512
+
 typedef struct
 {
     mop_s32 x;
@@ -108,7 +110,7 @@ typedef struct
 
 typedef struct
 {
-    mop_u8     buffer[512];
+    mop_u8     buffer[mop_path_max_count];
     mop_string filepath;
     mop_b8     is_directory;
     mop_b8     is_search_directory;
@@ -226,6 +228,9 @@ mop_get_command_line_info_signature;
 
 #define mop_get_command_line_arguments_signature mop_u32 mop_get_command_line_arguments(mop_string text_buffer, mop_u32 argument_buffer_count, mop_string *argument_buffer)
 mop_get_command_line_arguments_signature;
+
+#define mop_get_working_directory_signature mop_string mop_get_working_directory(mop_platform *platform)
+mop_get_working_directory_signature;
 
 #define mop_handle_messages_signature void mop_handle_messages(mop_platform *platform)
 mop_handle_messages_signature;
@@ -463,6 +468,9 @@ struct mop_platform
 
     mop_key_state keys[256];
 
+    mop_u8     working_directory_buffer[mop_path_max_count];
+    mop_string working_directory;
+
     mop_win32_close_window_requests close_window_requests;
 
     mop_point previous_mouse_position;
@@ -694,6 +702,28 @@ mop_get_command_line_arguments_signature
     LocalFree(arguments);
 
     return argument_count;
+}
+
+mop_get_working_directory_signature
+{
+    if (platform->working_directory.base)
+        return platform->working_directory;
+
+    platform->working_directory = mop_sl(mop_string) { platform->working_directory_buffer, 0 };
+    mop_string *working_directory = &platform->working_directory;
+
+    u32 count = GetCurrentDirectoryA(mop_carray_count(platform->working_directory_buffer), (char *) platform->working_directory_buffer);
+    mop_require(count);
+    assert(count <= mop_carray_count(platform->working_directory_buffer));
+    working_directory->count = count;
+
+    for (u32 i = 0; i < working_directory->count; i++)
+    {
+        if (working_directory->base[i] == '\\')
+            working_directory->base[i] = '/';
+    }
+
+    return platform->working_directory;
 }
 
 mop_handle_messages_signature

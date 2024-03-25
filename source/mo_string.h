@@ -141,6 +141,9 @@ mos_skip_until_pattern_or_end_signature;
 #define mos_contains_pattern_signature mos_string mos_contains_pattern(mos_string text, mos_string pattern)
 mos_contains_pattern_signature;
 
+#define mos_contains_pattern_from_end_signature mos_string mos_contains_pattern_from_end(mos_string text, mos_string pattern)
+mos_contains_pattern_from_end_signature;
+
 #define mos_parse_u64_ex_signature mos_b8 mos_parse_u64_ex(mos_u64 *result, mos_string *iterator, mos_u8 base)
 mos_parse_u64_ex_signature;
 
@@ -358,6 +361,38 @@ mos_contains_pattern_signature
         // inlined compare, since we know count's are equal
         // mos_are_equal would work as well
         mos_b8 does_match = mos_true;
+        for (mos_usize i = 0; i < pattern.count; i++)
+        {
+            if (text.base[offset + i] != pattern.base[i])
+            {
+                does_match = mos_false;
+                break;
+            }
+        }
+
+        if (does_match)
+            return mos_sl(mos_string) { text.base + offset, pattern.count };
+    }
+
+    return mos_string_empty;
+}
+
+
+mos_contains_pattern_from_end_signature
+{
+    if (!pattern.count)
+        return mos_sl(mos_string) { text.base + text.count, 0 };
+
+    if (text.count < pattern.count)
+        return mos_string_empty;
+
+    for (mos_usize reverse_offset = 0; reverse_offset < text.count + 1 - pattern.count; reverse_offset++)
+    {
+        // inlined compare, since we know count's are equal
+        // mos_are_equal would work as well
+        mos_b8 does_match = mos_true;
+
+        mos_usize offset = text.count - pattern.count - reverse_offset;
         for (mos_usize i = 0; i < pattern.count; i++)
         {
             if (text.base[offset + i] != pattern.base[i])
@@ -677,28 +712,32 @@ mos_split_path_signature
         directory.count -= 1;
 
     mos_string name = { path.base, 0 };
+    mos_string extension = name;
 
     while (path.count)
     {
         mos_usize count = mos_skip_until_pattern_or_end(&path, mos_s(".")).count;
-        if (!count)
-            break;
 
-        if (!mos_try_skip(&path, mos_s(".")))
-        {
-            path.base -= count;
-            path.count += count;
-            break;
-        }
+        if (mos_try_skip(&path, mos_s(".")))
+            extension.base = path.base;
+    }
 
-        name.count += count + 1;
+    if (extension.base == name.base)
+    {
+        name.count = (mos_usize) (path.base - name.base);
+        extension = path;
+    }
+    else
+    {
+        name.count      = (mos_usize) (extension.base - name.base);
+        extension.count = (mos_usize) (path.base - extension.base);
     }
 
     // remove .
-    if (name.count && (name.base[name.count - 1] == '.'))
-        name.count -= 1;
+    //if (name.count && (name.base[name.count - 1] == '.'))
+        // name.count -= 1;
 
-    mos_string extension = path;
+    // mos_string extension = path;
 
     return mos_sl(mos_split_path_result) { directory, name, extension };
 }
