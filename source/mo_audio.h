@@ -10,15 +10,18 @@
 extern "C" {
 #endif
 
-#if !defined moa_assert
-#define moa_assert(x)
+#if !defined moa_assert_message
+#define moa_assert_message(...)
 #endif
 
-#if !defined moa_require
-#define moa_require(x) (x)
+#if !defined moa_require_mesage
+#define moa_require_mesage(...)
 #endif
 
-#define moa_cases_complete(value) default: moa_assert(0)
+#define moa_assert(x)  moa_assert_message(x, "")
+#define moa_require(x) moa_require_message(x, "")
+
+#define moa_cases_complete(format, ...) default: moa_assert_message(moa_false, "unhandled switch case " format, __VA_ARGS__)
 
 typedef unsigned char      moa_u8;
 typedef unsigned short     moa_u16;

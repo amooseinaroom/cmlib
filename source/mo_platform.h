@@ -63,6 +63,29 @@ typedef mop_u8_array mop_string;
 
 const mop_string mop_string_empty = {0};
 
+#if !defined mop_assert_message
+#if defined mop_debug
+
+#define mop_assert_message(x, message, ...) if (!(x)) { mop_fatal_error("Assertion Failure", __FILE__, __FUNCTION__, __LINE__, # x, message, __VA_ARGS__); }
+
+#else
+
+#define mop_assert_message(...)
+
+#endif
+
+#endif
+
+#define mop_assert(x) mop_assert_message(x, "")
+
+#if !defined mop_require_message
+
+#define mop_require_message(x, message, ...) if (!(x)) { mop_fatal_error("Requirement Failure", __FILE__, __FUNCTION__, __LINE__, # x, message, __VA_ARGS__); }
+
+#endif
+
+#define mop_require(x) mop_require_message(x, "")
+
 struct mop_platform;
 typedef struct mop_platform mop_platform;
 
@@ -213,6 +236,9 @@ typedef enum mop_key mop_key;
 struct mop_platform;
 
 extern const mop_u32 mop_month_day_count[12];
+
+#define mop_fatal_error_signature void mop_fatal_error(mop_cstring label, mop_cstring file, mop_cstring function, mop_u32 line_number, mop_cstring condition_text, mop_cstring message, ...)
+mop_fatal_error_signature;
 
 #define mop_init_signature void mop_init(mop_platform *platform)
 mop_init_signature;
@@ -391,21 +417,6 @@ mop_key_poll_update_signature;
 #pragma comment(lib, "user32")
 #pragma comment(lib, "shell32")
 
-#if !defined mop_assert
-#if defined mop_debug
-// TODO: create proper message box
-#include <stdio.h>
-#define mop_assert(x) if (!(x)) { printf("%s,%s,%u: Assertion Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); if (IsDebuggerPresent()) __debugbreak(); else ExitProcess(0); }
-#else
-#define mop_assert(x)
-#endif
-#endif
-
-#if !defined mop_require
-#include <stdio.h>
-#define mop_require(x) if (!(x)) { printf("%s,%s,%u: Requirement Failure: '%s' failed\n", __FILE__, __FUNCTION__, __LINE__, # x); int error = GetLastError(); if (error) printf("   GetLastError() = %i\n", error); __debugbreak(); }
-#endif
-
 enum mop_character_symbol
 {
     mop_character_symbol_escape,
@@ -426,6 +437,10 @@ enum mop_character_symbol
 
     mop_character_symbol_page_up,
     mop_character_symbol_page_down,
+
+    mop_character_symbol_f1  = VK_F1,
+    mop_character_symbol_f24 = VK_F24,
+    mop_character_symbol_f_max = mop_character_symbol_f24,
 };
 
 enum mop_key
@@ -528,16 +543,65 @@ const mop_cstring mop_win32_window_class_name = "window class";
 
 mop_win32_close_window_requests mop_win32_global_close_window_requests;
 
+mop_fatal_error_signature
+{
+    char text_buffer[1024];
+    mop_usize text_count = mop_carray_count(text_buffer);
+    mop_string text = { (mop_u8 *) text_buffer, text_count };
+
+    mop_s32 count = snprintf((char *) text.base, text.count, "%s\n%s,%i:\n\n    Condition '%s' failed.\n\n", file, function, line_number, condition_text);
+    if (count >= 0)
+    {
+        text.base  += count;
+        text.count -= count;
+    }
+
+    {
+        va_list arguments;
+
+        va_start(arguments, message);
+
+        mop_s32 count = vsnprintf((char *) text.base, text.count, message, arguments);
+
+        va_end(arguments);
+
+        if (count >= 0)
+        {
+            text.base  += count;
+            text.count -= count;
+        }
+    }
+
+    if (text.count && (text.count < text_count))
+        text.base[0] = '\0';
+    else
+        text_buffer[text_count - 1] = '\0';
+
+    printf("%s:\n", label);
+    printf("%s\n", text_buffer);
+
+    mop_s32 result = MessageBox(mop_null, text_buffer, label, MB_RETRYCANCEL | MB_ICONERROR);
+    switch (result)
+    {
+        case IDCANCEL:
+        {
+            ExitProcess(-1);
+        } break;
+
+        case IDRETRY:
+        {
+            if (IsDebuggerPresent())
+                __debugbreak();
+            else
+                ExitProcess(-1);
+        } break;
+    }
+}
+
 LRESULT CALLBACK mop_win32_window_callback(HWND window_handle, UINT msg, WPARAM w_param, LPARAM l_param)
 {
     switch (msg)
     {
-    // case WM_DESTROY:
-    // {
-    //     PostQuitMessage(0);
-    //     return 0;
-    // }
-
         // don't destroy the window, since we typically want to react to that request
         // prevents WM_DESTROY to be called
         case WM_CLOSE:
@@ -866,9 +930,15 @@ mop_handle_messages_signature
                     mop_win32_add_character(platform, mop_character_symbol_page_down, mop_true, with_shift, with_alt, with_control);
                 } break;
 
+                // exclide space here, otherwise we get two characters
+                case VK_SPACE:
+                break;
+
                 default:
                 {
-                    if (with_alt || with_control)
+                    if (msg.wParam - VK_F1 < 24)
+                        mop_win32_add_character(platform, mop_character_symbol_f1 + msg.wParam - VK_F1, mop_true, with_shift, with_alt, with_control);
+                    else if (with_alt || with_control)
                         mop_win32_add_character(platform, msg.wParam, mop_false, with_shift, with_alt, with_control);
                 }
             }

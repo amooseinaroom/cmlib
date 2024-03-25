@@ -8,15 +8,18 @@
 extern "C" {
 #endif
 
-#if !defined moma_assert
-#define moma_assert(x)
+#if !defined moma_assert_message
+#define moma_assert_message(...)
 #endif
 
-#if !defined moma_require
-#define moma_require(x) (x)
+#if !defined moma_require_mesage
+#define moma_require_mesage(...)
 #endif
 
-#define moma_cases_complete(value) default: moma_assert(0)
+#define moma_assert(x)  moma_assert_message(x, "")
+#define moma_require(x) moma_require_message(x, "")
+
+#define moma_cases_complete(format, ...) default: moma_assert_message(moma_false, "unhandled switch case " format, __VA_ARGS__)
 
 typedef unsigned char      moma_u8;
 typedef unsigned int       moma_u32;

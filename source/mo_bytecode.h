@@ -8,15 +8,18 @@
 extern "C" {
 #endif
 
-#if !defined mobc_assert
-#define mobc_assert(x)
+#if !defined mobc_assert_message
+#define mobc_assert_message(...)
 #endif
 
-#if !defined mobc_require
-#define mobc_require(x) (x)
+#if !defined mobc_require_mesage
+#define mobc_require_mesage(...)
 #endif
 
-#define mobc_cases_complete(value) default: mobc_assert(0)
+#define mobc_assert(x)  mobc_assert_message(x, "")
+#define mobc_require(x) mobc_require_message(x, "")
+
+#define mobc_cases_complete(format, ...) default: mobc_assert_message(mobc_false, "unhandled switch case " format, __VA_ARGS__)
 
 typedef unsigned char      mobc_u8;
 typedef unsigned int       mobc_u32;

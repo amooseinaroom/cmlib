@@ -6,15 +6,18 @@
 extern "C" {
 #endif
 
-#if !defined mogl_assert
-#define mogl_assert(x)
+#if !defined mogl_assert_message
+#define mogl_assert_message(...)
 #endif
 
-#if !defined mogl_require
-#define mogl_require(x) (x)
+#if !defined mogl_require_mesage
+#define mogl_require_mesage(...)
 #endif
 
-#define mogl_cases_complete(value) default: mogl_assert(0)
+#define mogl_assert(x)  mogl_assert_message(x, "")
+#define mogl_require(x) mogl_require_message(x, "")
+
+#define mogl_cases_complete(format, ...) default: mogl_assert_message(mogl_false, "unhandled switch case " format, __VA_ARGS__)
 
 typedef unsigned char      mogl_u8;
 typedef unsigned int       mogl_u32;

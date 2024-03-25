@@ -9,23 +9,26 @@
 extern "C" {
 #endif
 
+#define assert_message(x, message, ...)  mop_assert_message(x, message, __VA_ARGS__)
+#define require_message(x, message, ...) mop_require_message(x, message, __VA_ARGS__)
+
 #define assert(x)  mop_assert(x)
 #define require(x) mop_require(x)
 
-#define cases_complete(value) default: assert(0)
+#define cases_complete(format, ...) default: assert_message(false, "unhandled switch case " format, __VA_ARGS__)
 
 // for compatibilty with other libs
-#define mos_assert(x)  assert(x)
-#define mote_assert(x) assert(x)
-#define moui_assert(x) assert(x)
-#define moma_assert(x) assert(x)
-#define moa_assert(x)  assert(x)
+#define mos_assert_message(x, message, ...)  assert_message(x, message, __VA_ARGS__)
+#define mote_assert_message(x, message, ...) assert_message(x, message, __VA_ARGS__)
+#define moui_assert_message(x, message, ...) assert_message(x, message, __VA_ARGS__)
+#define moma_assert_message(x, message, ...) assert_message(x, message, __VA_ARGS__)
+#define moa_assert_message(x, message, ...)  assert_message(x, message, __VA_ARGS__)
 
-#define mos_require(x)  require(x)
-#define mote_require(x) require(x)
-#define moui_require(x) require(x)
-#define moma_require(x) require(x)
-#define moa_require(x)  require(x)
+#define mos_require_message(x, message, ...)  require_message(x, message, __VA_ARGS__)
+#define mote_require_message(x, message, ...) require_message(x, message, __VA_ARGS__)
+#define moui_require_message(x, message, ...) require_message(x, message, __VA_ARGS__)
+#define moma_require_message(x, message, ...) require_message(x, message, __VA_ARGS__)
+#define moa_require_message(x, message, ...)  require_message(x, message, __VA_ARGS__)
 
 typedef unsigned char      u8;
 typedef unsigned short     u16;
@@ -108,6 +111,53 @@ copy_signature;
 
 #define flag32(bit) (((u32) 1) << (bit))
 #define flag64(bit) (((u64) 1) << (bit))
+
+// for use in macro lists
+
+#define mo_enum_item(name, prefix) prefix ## name,
+#define mo_string_item(name, ...) sc(# name),
+
+#define mo_enum_list(name, list_macro) \
+    typedef enum \
+    { \
+        list_macro(mo_enum_item, name ## _) \
+        name ## _count \
+    } name \
+
+#define mo_string_list(name, list_macro) \
+    const string name[] = \
+    { \
+        list_macro(mo_string_item) \
+    } \
+
+// example:
+//
+// here you can add and remove entries
+// #define my_list(macro, ...) \
+//     macro(apple, __VA_ARGS__) \
+//     macro(banana, __VA_ARGS__) \
+//     macro(grape, __VA_ARGS__) \
+//
+// mo_enum_list(fruit_tag, my_list);
+//
+// mo_string_list(fruit_names, my_list);
+//
+// will expand to this:
+//
+// typedef enum
+// {
+//     fruit_tag_apple,
+//     fruit_tag_banana,
+//     fruit_tag_grap,
+//
+//     fruit_tag_count
+// } fruit_tag;
+//
+// const string fruit_names[] =
+//     sc("apple"),
+//     sc("banana"),
+//     sc("grap"),
+// };
 
 #ifdef __cplusplus
 }

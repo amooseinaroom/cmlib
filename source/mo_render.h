@@ -6,15 +6,18 @@
 extern "C" {
 #endif
 
-#if !defined mor_assert
-#define mor_assert(x)
+#if !defined mor_assert_message
+#define mor_assert_message(...)
 #endif
 
-#if !defined mor_require
-#define mor_require(x) (x)
+#if !defined mor_require_mesage
+#define mor_require_mesage(...)
 #endif
 
-#define mor_cases_complete(value) default: mor_assert(0)
+#define mor_assert(x)  mor_assert_message(x, "")
+#define mor_require(x) mor_require_message(x, "")
+
+#define mor_cases_complete(format, ...) default: mor_assert_message(mor_false, "unhandled switch case " format, __VA_ARGS__)
 
 typedef unsigned char      mor_u8;
 typedef unsigned short     mor_u16;

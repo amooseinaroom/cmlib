@@ -8,9 +8,18 @@
 extern "C" {
 #endif
 
-#if !defined mote_assert
-#define mote_assert(x)
+#if !defined mote_assert_message
+#define mote_assert_message(...)
 #endif
+
+#if !defined mote_require_mesage
+#define mote_require_mesage(...)
+#endif
+
+#define mote_assert(x)  mote_assert_message(x, "")
+#define mote_require(x) mote_require_message(x, "")
+
+#define mote_cases_complete(format, ...) default: mote_assert_message(mote_false, "unhandled switch case " format, __VA_ARGS__)
 
 typedef unsigned char      mote_u8;
 typedef unsigned int       mote_u32;

@@ -8,9 +8,13 @@
 extern "C" {
 #endif
 
-#if !defined mos_assert
-#define mos_assert(x)
+#if !defined mos_assert_message
+#define mos_assert_message(...)
 #endif
+
+#define mos_assert(x) mos_assert_message(x, "")
+
+#define mos_cases_complete(format, ...) default: mos_assert_message(mos_false, "unhandled switch case " format, __VA_ARGS__)
 
 typedef unsigned char      mos_u8;
 typedef unsigned int       mos_u32;

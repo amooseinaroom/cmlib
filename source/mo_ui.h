@@ -29,18 +29,21 @@
 extern "C" {
 #endif
 
-#if !defined moui_assert
-#define moui_assert(x)
+#if !defined moui_assert_message
+#define moui_assert_message(...)
 #endif
 
-#if !defined moui_require
-#define moui_require(x) (x)
+#if !defined moui_require_mesage
+#define moui_require_mesage(...)
 #endif
 
-#define moui_cases_complete(value) default: moui_assert(0)
+#define moui_assert(x)  moui_assert_message(x, "")
+#define moui_require(x) moui_require_message(x, "")
+
+#define moui_cases_complete(format, ...) default: moui_assert_message(moui_false, "unhandled switch case " format, __VA_ARGS__)
 
 // you don't need to use these types outside of the file
-// this is just a personal preference of the developer
+// this is just a personal preference of the developermo
 
 typedef unsigned char      moui_u8;
 typedef unsigned int       moui_u32;

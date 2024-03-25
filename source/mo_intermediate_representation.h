@@ -11,15 +11,19 @@
 extern "C" {
 #endif
 
-#if !defined moir_assert
-#define moir_assert(x)
+#if !defined moir_assert_message
+#define moir_assert_message(...)
 #endif
 
-#if !defined moir_require
-#define moir_require(x) (x)
+#if !defined moir_require_mesage
+#define moir_require_mesage(...)
 #endif
 
-#define moir_cases_complete(value) default: moir_assert(0)
+#define moir_assert(x)  moir_assert_message(x, "")
+#define moir_require(x) moir_require_message(x, "")
+
+#define moir_cases_complete(format, ...) default: moir_assert_message(moa_false, "unhandled switch case " format, __VA_ARGS__)
+
 
 typedef unsigned char      moir_u8;
 typedef unsigned int       moir_u32;
