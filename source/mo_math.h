@@ -788,6 +788,15 @@ rgba rgba_lerp(rgba a, rgba b, f32 blend)
     };
 }
 
+box2 box2_merge(box2 a, box2 b)
+{
+    a.min.x = min(a.min.x, b.min.x);
+    a.min.y = min(a.min.y, b.min.y);
+    a.max.x = max(a.max.x, b.max.x);
+    a.max.y = max(a.max.y, b.max.y);
+    return a;
+}
+
 b8 box2_overlap(box2 a, box2 b)
 {
     return (a.min.x < b.max.x) && (b.min.x < a.max.x) && (a.min.y < b.max.y) && (b.min.y < a.max.y);

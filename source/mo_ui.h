@@ -311,6 +311,7 @@ typedef struct
 
     moui_u32 next_hot_priority;
 
+    moui_u32 previous_cursor_active_mask;
     moui_u32 cursor_active_mask;
 
     moui_vec2 previous_cursor;
@@ -496,8 +497,8 @@ moui_text_cursor_at_top_signature;
 #define moui_text_cursor_at_bottom_signature moui_text_cursor moui_text_cursor_at_bottom(moui_simple_font font, moui_vec2 position)
 moui_text_cursor_at_bottom_signature;
 
-#define moui_text_advance_line_signature void moui_text_advance_line(moui_simple_text_iterator *iterator)
-moui_text_advance_line_signature;
+#define moui_text_cursor_advance_line_signature void moui_text_cursor_advance_line(moui_simple_font font, moui_text_cursor *cursor)
+moui_text_cursor_advance_line_signature;
 
 #define moui_text_advance_signature moui_b8 moui_text_advance(moui_glyph *out_glyph, moui_simple_text_iterator *iterator)
 moui_text_advance_signature;
@@ -652,6 +653,7 @@ moui_frame_signature
 
     input->previous_cursor = input->cursor;
     input->cursor = cursor;
+    input->previous_cursor_active_mask = input->cursor_active_mask;
     input->cursor_active_mask = cursor_active_mask;
 
 #if defined moui_debug
@@ -2531,10 +2533,10 @@ moui_text_cursor_at_bottom_signature
     return moui_text_cursor_at_line(position);
 }
 
-moui_text_advance_line_signature
+moui_text_cursor_advance_line_signature
 {
-    iterator->cursor.position.x = iterator->cursor.line_start_x;
-    iterator->cursor.position.y -= iterator->font.line_spacing;
+    cursor->position.x  = cursor->line_start_x;
+    cursor->position.y -= font.line_spacing;
 }
 
 moui_text_advance_signature
@@ -2578,7 +2580,7 @@ moui_text_advance_signature
 
     if (code == '\n')
     {
-        moui_text_advance_line(iterator);
+        moui_text_cursor_advance_line(iterator->font, &iterator->cursor);
     }
 
     return moui_true;
@@ -3066,7 +3068,7 @@ moui_load_outlined_font_file_signature
 
 moui_resize_buffers_signature
 {
-    moma_free(arena, state->renderer.quads);
+    // moma_free(arena, state->renderer.quads);
     state->renderer.quad_count = moui_u32_max(state->renderer.quad_count, state->renderer.quad_request_count);
     state->renderer.quads = moma_allocate_array(arena, moui_quad, state->renderer.quad_count);
 

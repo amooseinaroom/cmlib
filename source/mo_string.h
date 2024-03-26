@@ -688,7 +688,7 @@ mos_encode_utf8_signature
     }
 
     mos_assert(0);
-    return mos_sl(mos_utf8_endocing) {0};
+    return mos_sl(mos_utf8_encoding) {0};
 }
 
 mos_split_path_signature
