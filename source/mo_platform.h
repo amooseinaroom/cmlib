@@ -8,8 +8,6 @@
 extern "C" {
 #endif
 
-#define mop_cases_complete(value) default: mop_assert(0)
-
 typedef unsigned char      mop_u8;
 typedef unsigned int       mop_u32;
 typedef unsigned long long mop_u64;
@@ -85,6 +83,8 @@ const mop_string mop_string_empty = {0};
 #endif
 
 #define mop_require(x) mop_require_message(x, "")
+
+#define mop_cases_complete(format, ...) default: mop_assert_message(false, "unhandled switch case " format, __VA_ARGS__)
 
 struct mop_platform;
 typedef struct mop_platform mop_platform;
@@ -480,6 +480,7 @@ struct mop_platform
     mop_character characters[32];
     mop_u32 character_count;
     mop_u32 missed_character_count;
+    mop_b8  previous_character_was_key_down;
 
     mop_key_state keys[256];
 
@@ -690,10 +691,18 @@ mop_window_get_info_signature
     return info;
 }
 
-void mop_win32_add_character(mop_platform *platform, mop_u32 code, mop_b8 is_symbol, mop_b8 with_shift, mop_b8 with_alt, mop_b8 with_control)
+void mop_win32_add_character(mop_platform *platform, mop_u32 code, mop_b8 is_symbol, mop_b8 with_shift, mop_b8 with_alt, mop_b8 with_control, mop_b8 override_previous_character)
 {
+    mop_assert(!is_symbol || !override_previous_character);
+
     if (platform->character_count < mop_carray_count(platform->characters))
     {
+        if (override_previous_character)
+        {
+            assert(platform->character_count);
+            platform->character_count -= 1;
+        }
+
         mop_character *character = &platform->characters[platform->character_count];
         platform->character_count++;
 
@@ -811,9 +820,14 @@ mop_handle_messages_signature
     mop_b8 with_alt     = (GetAsyncKeyState(VK_MENU) >> 15) & 1;
     mop_b8 with_control = (GetAsyncKeyState(VK_CONTROL) >> 15) & 1;
 
+    // we want to override key down characters if they are followed by a char
+    mop_b8 previous_character_was_key_down = mop_false;
+
     MSG msg = {0};
     while (PeekMessageA(&msg, mop_null, 0, 0, PM_REMOVE))
     {
+        mop_b8 preserve_character_was_key_down = mop_false;
+
         switch (msg.message)
         {
         case WM_QUIT:
@@ -867,79 +881,81 @@ mop_handle_messages_signature
 
                 case VK_ESCAPE:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_escape, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_escape, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_BACK:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_backspace, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_backspace, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_DELETE:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_delete, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_delete, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_RETURN:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_return, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_return, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_TAB:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_tabulator, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_tabulator, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_LEFT:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_left, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_left, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_RIGHT:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_right, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_right, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_DOWN:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_down, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_down, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_UP:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_up, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_up, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_HOME:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_home, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_home, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_END:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_end, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_end, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_PRIOR:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_page_up, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_page_up, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
 
                 case VK_NEXT:
                 {
-                    mop_win32_add_character(platform, mop_character_symbol_page_down, mop_true, with_shift, with_alt, with_control);
+                    mop_win32_add_character(platform, mop_character_symbol_page_down, mop_true, with_shift, with_alt, with_control, mop_false);
                 } break;
-
-                // exclide space here, otherwise we get two characters
-                case VK_SPACE:
-                break;
 
                 default:
                 {
                     if (msg.wParam - VK_F1 < 24)
-                        mop_win32_add_character(platform, mop_character_symbol_f1 + msg.wParam - VK_F1, mop_true, with_shift, with_alt, with_control);
-                    else if (with_alt || with_control)
-                        mop_win32_add_character(platform, msg.wParam, mop_false, with_shift, with_alt, with_control);
+                    {
+                        mop_win32_add_character(platform, mop_character_symbol_f1 + msg.wParam - VK_F1, mop_true, with_shift, with_alt, with_control, mop_false);
+                    }
+                    else
+                    {
+                        mop_win32_add_character(platform, msg.wParam, mop_true, with_shift, with_alt, with_control, mop_false);
+                        previous_character_was_key_down = mop_true;
+                        preserve_character_was_key_down = mop_true;
+                    }
                 }
             }
 
@@ -950,12 +966,17 @@ mop_handle_messages_signature
         case WM_CHAR:
         {
             if (msg.wParam >= ' ')
-                mop_win32_add_character(platform, msg.wParam, mop_false, with_shift, with_alt, with_control);
+            {
+                mop_win32_add_character(platform, msg.wParam, mop_false, with_shift, with_alt, with_control, previous_character_was_key_down);
+            }
         } break;
         }
 
         TranslateMessage(&msg);
         DispatchMessage(&msg);
+
+        if (!preserve_character_was_key_down)
+            previous_character_was_key_down = mop_false;
     }
 
     mop_key_poll_update(platform, VK_LBUTTON, (GetAsyncKeyState(VK_LBUTTON) >> 15) & 1);

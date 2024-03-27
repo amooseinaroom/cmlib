@@ -15,7 +15,7 @@ extern "C" {
 #define assert(x)  mop_assert(x)
 #define require(x) mop_require(x)
 
-#define cases_complete(format, ...) default: assert_message(false, "unhandled switch case " format, __VA_ARGS__)
+#define cases_complete(format, ...)  mop_cases_complete(format, __VA_ARGS__)
 
 // for compatibilty with other libs
 #define mos_assert_message(x, message, ...)  assert_message(x, message, __VA_ARGS__)

@@ -3068,19 +3068,22 @@ moui_load_outlined_font_file_signature
 
 moui_resize_buffers_signature
 {
-    // moma_free(arena, state->renderer.quads);
-    state->renderer.quad_count = moui_u32_max(state->renderer.quad_count, state->renderer.quad_request_count);
+    // double the requested count's to avoid flickering, since we skip rendering, if we can't display all that was requested
+
+    if (state->renderer.quad_request_count >= state->renderer.quad_count)
+        state->renderer.quad_count = state->renderer.quad_request_count * 2;
     state->renderer.quads = moma_allocate_array(arena, moui_quad, state->renderer.quad_count);
 
-    state->renderer.vertex_count = moui_u32_max(state->renderer.vertex_count, state->renderer.vertex_request_count);
+    if (state->renderer.vertex_request_count >= state->renderer.vertex_count)
+        state->renderer.vertex_count = state->renderer.vertex_request_count * 2;
     state->renderer.vertices = moma_allocate_array(arena, moui_vertex, state->renderer.vertex_count);
 
-    // we do a doubling stratagy, since we don't know how many different textures we missed
-    if (state->renderer.texture_request_count > state->renderer.texture_count)
-        state->renderer.texture_count = moui_u32_max(4, 2 * state->renderer.texture_count);
+    if (state->renderer.texture_request_count >= state->renderer.texture_count)
+        state->renderer.texture_count = 2 * state->renderer.texture_request_count;
     state->renderer.textures = moma_allocate_array(arena, moui_texture, state->renderer.texture_count);
 
-    state->renderer.command_count = moui_u32_max(state->renderer.command_count, state->renderer.command_request_count);
+    if (state->renderer.command_request_count >= state->renderer.command_count)
+        state->renderer.command_count = state->renderer.command_request_count * 2;
     state->renderer.commands = moma_allocate_array(arena, moui_command, state->renderer.command_count);
 
     moui_set_buffers(state, state->renderer.quad_count, state->renderer.quads, state->renderer.vertex_count, state->renderer.vertices, state->renderer.texture_count, state->renderer.textures, state->renderer.command_count, state->renderer.commands);
