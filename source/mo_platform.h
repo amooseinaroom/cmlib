@@ -965,7 +965,8 @@ mop_handle_messages_signature
 
         case WM_CHAR:
         {
-            if (msg.wParam >= ' ')
+            // 127 is delete character, produced also with control + backspace
+            if ((msg.wParam >= ' ') && (msg.wParam != 127))
             {
                 mop_win32_add_character(platform, msg.wParam, mop_false, with_shift, with_alt, with_control, previous_character_was_key_down);
             }

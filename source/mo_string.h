@@ -118,6 +118,9 @@ mos_substring_signature;
 #define mos_remaining_substring_signature mos_string mos_remaining_substring(mos_string text, mos_usize offset)
 mos_remaining_substring_signature;
 
+#define mos_substring_until_end_signature mos_string mos_substring_until_end(mos_string start, mos_string end)
+mos_substring_until_end_signature;
+
 #define mos_set_contains_signature mos_b8 mos_set_contains(mos_string set, mos_u8 symbol)
 mos_set_contains_signature;
 
@@ -233,6 +236,16 @@ mos_remaining_substring_signature
 {
     return mos_substring(text, offset, text.count - offset);
 }
+
+mos_substring_until_end_signature
+{
+    mos_assert(start.base <= end.base);
+    mos_assert(end.base <= start.base + start.count);
+    mos_assert(end.base + end.count <= start.base + start.count);
+
+    return mos_sl(mos_string) { start.base, (mos_usize) (end.base - start.base) };
+}
+
 
 #if 0
 mos_write_signature
