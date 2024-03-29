@@ -62,7 +62,10 @@ typedef mos_u8_array mos_string;
 #define mos_sl(name) (name)
 #endif
 
-#define mos_s(static_string) mos_sl(mos_string) { (mos_u8 *) static_string, mos_carray_count(static_string) - 1 }
+#define mos_s(static_string)   mos_sl(mos_string) { (mos_u8 *) static_string, mos_carray_count(static_string) - 1 }
+// for const strings
+#define mos_sc(static_string)                     { (mos_u8 *) static_string, mos_carray_count(static_string) - 1 }
+
 #define mos_t(base, count)   mos_sl(mos_string) { (mos_u8 *) base, (mos_usize) count }
 #define mos_fs(text) (int) (text).count, (char *) (text).base
 
@@ -96,6 +99,9 @@ typedef struct
 
 #include <stdarg.h>
 #include <stdio.h>
+
+const mos_string mos_white_space            = mos_sc(" \t\n\r");
+const mos_string mos_default_name_blacklist = mos_sc(" \t\n\r!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~");
 
 #define mos_utf8_advance_signature mos_utf8_result mos_utf8_advance(mos_string *iterator)
 mos_utf8_advance_signature;
@@ -135,6 +141,9 @@ mos_skip_white_space_signature;
 
 #define mos_skip_name_signature mos_string mos_skip_name(mos_string *iterator, mos_string blacklist)
 mos_skip_name_signature;
+
+#define mos_skip_default_name_signature mos_string mos_skip_default_name(mos_string *iterator)
+mos_skip_default_name_signature;
 
 #define mos_try_skip_signature mos_b8 mos_try_skip(mos_string *iterator, mos_string pattern)
 mos_try_skip_signature;
@@ -309,7 +318,7 @@ mos_skip_until_set_or_end_signature
 
 mos_skip_white_space_signature
 {
-    return mos_skip_set(iterator, mos_s(" \t\n\r"));
+    return mos_skip_set(iterator, mos_white_space);
 }
 
 mos_skip_name_signature
@@ -323,6 +332,11 @@ mos_skip_name_signature
 
     mos_string name = mos_skip_until_set_or_end(iterator, blacklist);
     return name;
+}
+
+mos_skip_default_name_signature
+{
+    return mos_skip_name(iterator, mos_default_name_blacklist);
 }
 
 mos_try_skip_signature
