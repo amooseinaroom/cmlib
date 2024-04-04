@@ -255,6 +255,9 @@ mop_get_command_line_info_signature;
 #define mop_get_command_line_arguments_signature mop_u32 mop_get_command_line_arguments(mop_string text_buffer, mop_u32 argument_buffer_count, mop_string *argument_buffer)
 mop_get_command_line_arguments_signature;
 
+#define mop_get_program_directory_signature mop_string mop_get_program_directory(mop_platform *platform)
+mop_get_program_directory_signature;
+
 #define mop_get_working_directory_signature mop_string mop_get_working_directory(mop_platform *platform)
 mop_get_working_directory_signature;
 
@@ -483,6 +486,9 @@ struct mop_platform
     mop_b8  previous_character_was_key_down;
 
     mop_key_state keys[256];
+
+    mop_u8     program_directory_buffer[mop_path_max_count];
+    mop_string program_directory;
 
     mop_u8     working_directory_buffer[mop_path_max_count];
     mop_string working_directory;
@@ -797,6 +803,41 @@ mop_get_working_directory_signature
     }
 
     return platform->working_directory;
+}
+
+mop_get_program_directory_signature
+{
+    if (platform->program_directory.base)
+        return platform->program_directory;
+
+    platform->program_directory = mop_sl(mop_string) { platform->program_directory_buffer, 0 };
+    mop_string *program_directory = &platform->program_directory;
+
+    program_directory->count = GetModuleFileNameA(mop_null, (char *) program_directory->base, mop_carray_count(platform->program_directory_buffer));
+    mop_require(program_directory->count);
+
+    // error could be ERROR_INSUFFICIENT_BUFFER, since the function truncates the path if the buffer is too small
+    if (program_directory->count == mop_carray_count(platform->program_directory_buffer))
+    {
+        mop_s32 error = GetLastError();
+        mop_require(!error)
+    }
+
+    {
+        mop_usize count = 0; // count without name
+        for (u32 i = 0; i < program_directory->count; i++)
+        {
+            if (program_directory->base[i] == '\\')
+            {
+                program_directory->base[i] = '/';
+                count = i;
+            }
+        }
+
+        program_directory->count = count;
+    }
+
+    return platform->program_directory;
 }
 
 mop_handle_messages_signature
@@ -1439,14 +1480,20 @@ mop_load_symbol_signature
 mop_hot_reload_signature
 {
     mop_u8 dll_name_buffer[MAX_PATH];
-    mop_string dll_name = { dll_name_buffer, name.count + 4 };
 
-    mop_win32_to_cpath(dll_name_buffer, name);
-    dll_name_buffer[name.count] = '.';
-    dll_name_buffer[name.count + 1] = 'd';
-    dll_name_buffer[name.count + 2] = 'l';
-    dll_name_buffer[name.count + 3] = 'l';
-    dll_name_buffer[name.count + 4] = '\0';
+    mop_string program_directory = mop_get_program_directory(platform);
+    mop_assert(program_directory.count + name.count + 5 <= mop_carray_count(dll_name_buffer));
+
+    mop_win32_to_cpath(dll_name_buffer, program_directory);
+    dll_name_buffer[program_directory.count] = '/';
+    mop_win32_to_cpath(dll_name_buffer + program_directory.count + 1, name);
+    dll_name_buffer[program_directory.count + 1 + name.count] = '.';
+    dll_name_buffer[program_directory.count + 1 + name.count + 1] = 'd';
+    dll_name_buffer[program_directory.count + 1 + name.count + 2] = 'l';
+    dll_name_buffer[program_directory.count + 1 + name.count + 3] = 'l';
+    dll_name_buffer[program_directory.count + 1 + name.count + 4] = '\0';
+
+    mop_string dll_name = { dll_name_buffer, program_directory.count + name.count + 5 };
 
     mop_u64 write_timestamp = mop_get_file_write_timestamp(platform, dll_name);
     if (write_timestamp == state->write_timestamp)
