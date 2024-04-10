@@ -22,6 +22,7 @@ extern "C" {
 #define mobc_cases_complete(format, ...) default: mobc_assert_message(mobc_false, "unhandled switch case " format, __VA_ARGS__)
 
 typedef unsigned char      mobc_u8;
+typedef unsigned short     mobc_u16;
 typedef unsigned int       mobc_u32;
 typedef unsigned long long mobc_u64;
 
@@ -74,6 +75,25 @@ typedef mobc_u8_array mobc_string;
 
 const mobc_string mobc_string_empty = {0};
 
+
+// for use in macro lists
+
+#define mobc_enum_item(name, prefix) prefix ## name,
+#define mobc_string_item(name, ...) sc(# name),
+
+#define mobc_enum_list(name, list_macro) \
+    typedef enum \
+    { \
+        list_macro(mobc_enum_item, name ## _) \
+        name ## _count \
+    } name \
+
+#define mobc_string_list(name, list_macro) \
+    const string name[] = \
+    { \
+        list_macro(mobc_string_item) \
+    } \
+
 typedef struct
 {
     mobc_u32 *register_memory;
@@ -95,40 +115,34 @@ typedef struct
     mobc_u32 zero;
 } mobc_machine;
 
-typedef enum
-{
-    mobc_instruction_tag_invalid,
+#define mobc_instruction_list(macro, ...) \
+    macro(invalid, __VA_ARGS__) \
+    macro(push, __VA_ARGS__) \
+    macro(pop, __VA_ARGS__) \
+    macro(jump, __VA_ARGS__) \
+    macro(jump_on_false, __VA_ARGS__) \
+    macro(jump_on_true, __VA_ARGS__) \
+    macro(call, __VA_ARGS__) \
+    macro(call_return, __VA_ARGS__) \
+    macro(register_move, __VA_ARGS__) \
+    macro(register_push, __VA_ARGS__) \
+    macro(neg, __VA_ARGS__) \
+    macro(add, __VA_ARGS__) \
+    macro(sub, __VA_ARGS__) \
+    macro(mul, __VA_ARGS__) \
+    macro(div, __VA_ARGS__) \
+    macro(equal, __VA_ARGS__) \
+    macro(not_equal, __VA_ARGS__) \
+    macro(less, __VA_ARGS__) \
+    macro(less_equal, __VA_ARGS__) \
+    macro(greater_equal, __VA_ARGS__) \
+    macro(greater, __VA_ARGS__) \
 
-    mobc_instruction_tag_push,
-    mobc_instruction_tag_pop,
+mobc_enum_list(mobc_instruction_tag,     mobc_instruction_list);
+mobc_string_list(mobc_instruction_names, mobc_instruction_list);
 
-    mobc_instruction_tag_jump,
-    mobc_instruction_tag_jump_on_false,
-    mobc_instruction_tag_jump_on_true,
-
-    mobc_instruction_tag_call,
-    mobc_instruction_tag_call_return,
-
-    mobc_instruction_tag_register_move,
-
-    mobc_instruction_tag_neg,
-    mobc_instruction_tag_add,
-    mobc_instruction_tag_sub,
-    mobc_instruction_tag_mul,
-    mobc_instruction_tag_div,
-
-    mobc_instruction_tag_equal,
-    mobc_instruction_tag_not_equal,
-    mobc_instruction_tag_less,
-    mobc_instruction_tag_less_equal,
-    mobc_instruction_tag_greater_equal,
-    mobc_instruction_tag_greater,
-
-    mobc_instruction_tag_count,
-} _mobc_instruction_tag;
-
-// we ant to store tags as u8
-typedef mobc_u8 mobc_instruction_tag;
+// we want to store tags as u8
+typedef mobc_u8 mobc_instruction_tag_u8;
 
 typedef mobc_u32 mobc_register;
 
@@ -152,32 +166,32 @@ const mobc_operator_mask mobc_operator_mask_f32 = { .is_float = 1 };
 
 typedef union
 {
-    mobc_instruction_tag tag;
+    mobc_instruction_tag_u8 tag;
 
     struct
     {
-        mobc_instruction_tag tag;
+        mobc_instruction_tag_u8 tag;
 
         mobc_u32 value;
     } push;
 
     struct
     {
-        mobc_instruction_tag tag;
+        mobc_instruction_tag_u8 tag;
 
         mobc_u32 register_count;
     } pop;
 
     struct
     {
-        mobc_instruction_tag tag;
+        mobc_instruction_tag_u8 tag;
 
         mobc_u32      next_instruction_index;
     } jump;
 
     struct
     {
-        mobc_instruction_tag tag;
+        mobc_instruction_tag_u8 tag;
 
         mobc_register condition;
         mobc_u32      next_instruction_index;
@@ -185,27 +199,35 @@ typedef union
 
     struct
     {
-        mobc_instruction_tag tag;
+        mobc_instruction_tag_u8 tag;
 
         mobc_u32 next_instruction_index;
-        mobc_u32 argument_count;
+        mobc_u16 /* register */ argument_offset;
+        mobc_u16 argument_count;
     } call;
 
     struct
     {
-        mobc_instruction_tag tag;
+        mobc_instruction_tag_u8 tag;
     } call_return;
 
     struct
     {
-        mobc_instruction_tag tag;
+        mobc_instruction_tag_u8 tag;
 
         mobc_register destination, source;
     } register_move;
 
     struct
     {
-        mobc_instruction_tag tag;
+        mobc_instruction_tag_u8 tag;
+
+        mobc_register source;
+    } register_push;
+
+    struct
+    {
+        mobc_instruction_tag_u8 tag;
 
         mobc_operator_mask operator_mask;
         mobc_register      expression;
@@ -213,7 +235,7 @@ typedef union
 
     struct
     {
-        mobc_instruction_tag tag;
+        mobc_instruction_tag_u8 tag;
 
         mobc_operator_mask operator_mask;
         mobc_register      left;
@@ -314,22 +336,25 @@ mobc_execute_signature
 
         case mobc_instruction_tag_call:
         {
-            if (instruction.call.argument_count > (machine->register_used_count - machine->register_offset))
+            if (instruction.call.argument_offset > (machine->register_used_count - machine->register_offset))
                 return mobc_false;
 
-            if (machine->register_used_count + 2 > machine->register_count)
+            if (instruction.call.argument_offset + instruction.call.argument_count > (machine->register_used_count - machine->register_offset))
                 return mobc_false;
 
-            // move arguments into new frame
-            memmove(machine->register_memory + machine->register_used_count - instruction.call.argument_count + 2, machine->register_memory + machine->register_used_count - instruction.call.argument_count, sizeof(mobc_u32) * instruction.call.argument_count);
+            if (machine->register_used_count + 2 + instruction.call.argument_count > machine->register_count)
+                return mobc_false;
+
+            machine->register_used_count += 2 + instruction.call.argument_count;
 
             // save register offset and return address
-            machine->register_memory[machine->register_used_count - instruction.call.argument_count] = machine->register_offset;
-            machine->register_memory[machine->register_used_count - instruction.call.argument_count + 1] = machine->instruction_index;
+            machine->register_memory[machine->register_used_count - instruction.call.argument_count - 2] = machine->register_offset;
+            machine->register_memory[machine->register_used_count - instruction.call.argument_count - 1] = machine->instruction_index;
 
-            machine->register_used_count += 2;
-            machine->register_offset = machine->register_used_count - instruction.call.argument_count;
+            // copy arguments into new scope
+            memcpy(machine->register_memory + machine->register_used_count - instruction.call.argument_count, machine->register_memory + machine->register_offset + instruction.call.argument_offset, sizeof(mobc_u32) * instruction.call.argument_count);
 
+            machine->register_offset   = machine->register_used_count - instruction.call.argument_count;
             machine->instruction_index = instruction.call.next_instruction_index;
         } break;
 
@@ -345,7 +370,7 @@ mobc_execute_signature
             machine->register_offset   = machine->register_memory[machine->register_offset - 2];
 
             // move return values into new frame
-            memmove(machine->register_memory + machine->register_used_count - return_value_count - 2, machine->register_memory + machine->register_used_count - return_value_count, sizeof(mobc_u32) * return_value_count);
+            memcpy(machine->register_memory + machine->register_used_count - return_value_count - 2, machine->register_memory + machine->register_used_count - return_value_count, sizeof(mobc_u32) * return_value_count);
 
             machine->register_used_count -= 2;
             mobc_assert(machine->register_offset <= machine->register_used_count);
@@ -357,6 +382,12 @@ mobc_execute_signature
             mobc_u32 source       = *mobc_get_register(&ok, machine, instruction.register_move.source);
 
             *destination = source;
+        } break;
+
+        case mobc_instruction_tag_register_push:
+        {
+            mobc_u32 source = *mobc_get_register(&ok, machine, instruction.register_push.source);
+            mobc_push_register(&ok, machine, source);
         } break;
 
         case mobc_instruction_tag_neg:
