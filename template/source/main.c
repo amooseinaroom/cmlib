@@ -58,8 +58,8 @@ typedef struct
 
     random_pcg random;
 
-    usize memory_ui_reset_count;
-    usize memory_frame_reset_count;
+    usize memory_asset_offset;
+    usize memory_reset_offset;
 } program_state;
 
 program_state global_program;
@@ -85,41 +85,56 @@ int main(int argument_count, char *arguments[])
 
     program->random = random_from_win23();
 
-    // WARNING: all memory allocation from this line on is frame temporary
-
-    program->memory_ui_reset_count = program->memory.used_count;
-
     // allocate font
     s32 pixel_height = 22;
     s32 thickness    = 2;
+    program->memory_asset_offset = program->memory.used_count;
     program->font = moui_load_outlined_font_file(&platform, &program->memory, s("C:/windows/fonts/consola.ttf"), 1024, 1024, pixel_height, ' ', 96, thickness, moui_rgba_white, moui_rgba_black);
 
     program->ui.base.renderer.quad_count = 1 << 20;
     program->ui.base.renderer.texture_count = 64;
     program->ui.base.renderer.command_count = 1024;
-    moui_resize_buffers(&program->ui.base, &program->memory);
 
-    program->memory_frame_reset_count = program->memory.used_count;
+    // WARNING: all memory allocation from this line on is frame temporary
+    program->memory_reset_offset = program->memory.used_count;
+    moui_resize_buffers(&program->ui.base, &program->memory);
 
     mop_u64 realtime_counter = mop_get_realtime_counter(&platform);
     platform.delta_seconds = 0.0f;
     platform.last_realtime_counter = realtime_counter;
 
-    while (!platform.do_quit)
+#if !mo_enable_hot_reloading
+    b8 did_reload = true;
+#endif
+
+    while (true)
     {
         mop_handle_messages(&platform);
 
-        b8 did_reload = mop_hot_reload(&platform, &hot_reload_state, s("hot"));
+    #if mo_enable_hot_reloading
 
-        if (!hot_reload_state.hot_update(&platform, sl(u8_array) { (u8 *) program, sizeof(*program) }, did_reload))
+        b8 did_reload = mop_hot_reload(&platform, &hot_reload_state, s("hot"));
+        hot_reload_state.hot_update(&platform, sl(u8_array) { (u8 *) program, sizeof(*program) }, did_reload);
+
+    #else
+
+        mop_hot_update(&platform, sl(u8_array) { (u8 *) program, sizeof(*program) }, did_reload);
+        did_reload = false;
+
+    #endif
+
+        // give update a chance to catch and override quit
+        if (platform.do_quit)
             break;
 
         moui_default_render_begin(&program->ui, &ui_window);
 
-        moui_default_render_prepare_execute_viewport(&program->ui, program->ui_letterbox);
-        // moui_default_render_prepare_execute(&program->ui);
+        // moui_default_render_prepare_execute_viewport(&program->ui, program->ui_letterbox);
+        moui_default_render_prepare_execute(&program->ui);
 
         moui_execute(&program->ui.base);
+
+        program->memory.used_count = program->memory_reset_offset;
         moui_resize_buffers(&program->ui.base, &program->memory);
 
         moui_default_render_end(&program->ui, &ui_window, true);
@@ -142,6 +157,12 @@ mop_hot_update_signature
     #endif
 
     mop_window_info window_info = mop_window_get_info(platform, &program->window);
+
+    if (platform->do_quit || window_info.requested_close)
+    {
+        platform->do_quit = true;
+    }
+
     vec2 ui_size = { (f32) window_info.size.x, (f32) window_info.size.y };
     vec2 mouse_position = { (f32) window_info.relative_mouse_position.x, (f32) window_info.relative_mouse_position.y };
 
@@ -183,7 +204,7 @@ mop_hot_update_signature
 
         if (program->font.height != pixel_height)
         {
-            program->memory.used_count = program->memory_ui_reset_count;
+            program->memory.used_count = program->memory_asset_offset;
 
             if (program->font.texture.handle)
             {
@@ -196,20 +217,15 @@ mop_hot_update_signature
             program->font = moui_load_outlined_font_file(platform, &program->memory, s("assets/fonts/steelfis.ttf"), 1024, 1024, pixel_height, ' ', 96, thickness, moui_rgba_white, moui_rgba_black);
 
             ui->renderer.quads = null;
+            program->memory_reset_offset = program->memory.used_count;
             moui_resize_buffers(ui, &program->memory);
-
-            program->memory_frame_reset_count = program->memory.used_count;
         }
     }
 
     moui_simple_font font = program->font;
 
-    program->memory.used_count = program->memory_frame_reset_count;
-
     moui_frame(ui, ui_size, mouse_position, platform->keys[mop_key_mouse_left].is_active << 0);
 
     moui_text_cursor print_cursor = moui_text_cursor_at_top(font, sl(moui_vec2) { 0, ui_size.y });
     moui_printf(ui, font, 0, sl(moui_rgba) { 1.0f, 1.0f, 1.0f, 1.0f }, &print_cursor, "fps: %f\n", 1.0f / platform->delta_seconds);
-
-    return true;
 }
