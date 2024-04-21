@@ -321,6 +321,7 @@ mos_skip_white_space_signature
     return mos_skip_set(iterator, mos_white_space);
 }
 
+// MAYBE: skip white space if we skipped a name?
 mos_skip_name_signature
 {
     if (!iterator->count)

@@ -11,21 +11,16 @@
 extern "C" {
 #endif
 
-#if !defined moir_assert_message
-#define moir_assert_message(...)
-#endif
-
-#if !defined moir_require_mesage
-#define moir_require_mesage(...)
-#endif
+#define moir_assert_message(x, message, ...)  mobc_assert_message(x, message, __VA_ARGS__)
+#define moir_require_message(x, message, ...) mobc_require_message(x, message, __VA_ARGS__)
 
 #define moir_assert(x)  moir_assert_message(x, "")
 #define moir_require(x) moir_require_message(x, "")
 
-#define moir_cases_complete(format, ...) default: moir_assert_message(moa_false, "unhandled switch case " format, __VA_ARGS__)
-
+#define moir_cases_complete(format, ...) default: moir_assert_message(moir_false, "unhandled switch case " format, __VA_ARGS__)
 
 typedef unsigned char      moir_u8;
+typedef unsigned short     moir_u16;
 typedef unsigned int       moir_u32;
 typedef unsigned long long moir_u64;
 
@@ -54,23 +49,43 @@ const moir_b8 moir_true  = 1;
 #define moir_sl(name) (name)
 #endif
 
-typedef enum
-{
-    moir_node_tag_invalid,
-    moir_node_tag_variable,
-    moir_node_tag_assignment,
+// for use in macro lists
 
-    moir_node_tag_scope,
-    moir_node_tag_loop_with_count,
+#define moir_enum_item(name, prefix) prefix ## name,
+#define moir_string_item(name, ...) sc(# name),
 
-    moir_node_tag_expression_number,
-    moir_node_tag_expression_name,
-    moir_node_tag_expression_operator,
+#define moir_enum_list(name, list_macro) \
+    typedef enum \
+    { \
+        list_macro(moir_enum_item, name ## _) \
+        name ## _count \
+    } name \
 
-    moir_node_tag_count,
-} _moir_node_tag;
+#define moir_string_list(name, list_macro) \
+    const string name[] = \
+    { \
+        list_macro(moir_string_item) \
+    } \
 
-typedef moir_u8 moir_node_tag;
+#define moir_node_tag_list(macro, ...) \
+    macro(invalid, __VA_ARGS__) \
+    macro(variable, __VA_ARGS__) \
+    macro(assignment, __VA_ARGS__) \
+    macro(scope, __VA_ARGS__) \
+    macro(loop_with_count, __VA_ARGS__) \
+    macro(function, __VA_ARGS__) \
+    macro(function_return, __VA_ARGS__) \
+    macro(expression_number, __VA_ARGS__) \
+    macro(expression_name, __VA_ARGS__) \
+    macro(expression_function_call, __VA_ARGS__) \
+    macro(expression_operator, __VA_ARGS__) \
+    macro(expression_unresolved_name, __VA_ARGS__) \
+
+moir_enum_list(moir_node_tag, moir_node_tag_list);
+moir_string_list(moir_node_tag_names, moir_node_tag_list);
+
+// for struct fields
+typedef moir_u8 moir_node_tag_type;
 
 typedef enum
 {
@@ -78,6 +93,7 @@ typedef enum
     moir_type_tag_u32,
     moir_type_tag_s32,
     moir_type_tag_f32,
+    moir_type_tag_unresolved,
 
     moir_type_tag_count,
 } _moir_type_tag;
@@ -104,7 +120,7 @@ struct moir_node
     moir_node *parent;
     moir_node *next;
 
-    moir_node_tag tag;
+    moir_node_tag_type tag;
 
     union
     {
@@ -135,6 +151,26 @@ struct moir_node
             moir_node *body;
         } loop_with_count;
 
+        struct
+        {
+            moir_node  *body_scope;
+            // inside the body_scope
+            // body_scope->scope.statements == first argument
+            // first_statement comes right after all arguments
+            moir_node  *first_statement;
+
+            moir_node  *result_scope;
+            mos_string name;
+            moir_u32   argument_count;
+            moir_u32   result_count;
+        } function;
+
+        struct
+        {
+            moir_node *function;
+            moir_node *expressions;
+        } function_return;
+
         moir_expression_number expression_number;
 
         struct
@@ -144,10 +180,23 @@ struct moir_node
 
         struct
         {
-            moir_node            *left;
-            moir_node            *right;
-            mobc_instruction_tag operator_tag;
-            moir_type_tag        type_tag;
+            moir_node  *function_call_expressions;
+            mos_string name;
+            moir_b8    is_function_call;
+        } expression_unresolved_name;
+
+        struct
+        {
+            moir_node *function;
+            moir_node *expressions;
+        } expression_function_call;
+
+        struct
+        {
+            moir_node               *left;
+            moir_node               *right;
+            mobc_instruction_tag_u8 operator_tag;
+            moir_type_tag           type_tag;
         } expression_operator;
     };
 };
@@ -169,18 +218,41 @@ typedef struct
 
 typedef struct
 {
+    moir_node *node;
+    moir_u32  body_instruction_index;
+} moir_function;
+
+typedef struct
+{
+    moir_node *function;
+    moir_u32  instruction_index;
+} moir_call;
+
+typedef struct
+{
     mobc_instruction *instructions;
     moir_register    *registers;
+    moir_function    *functions;
+    moir_call        *calls;
 
     moir_u32 instruction_count;
     moir_u32 register_count;
+    moir_u32 function_count;
+    moir_u32 call_count;
 
     moir_u32 instruction_used_count;
     moir_u32 register_used_count;
+    moir_u32 function_used_count;
+    moir_u32 call_used_count;
+
+    moir_u32 register_function_offset;
 } moir_bytecode;
 
 #define moir_compile_signature moir_node * moir_compile(moir_lang *lang, mos_string source)
 moir_compile_signature;
+
+#define moir_generate_bytecode_signature void moir_generate_bytecode(moir_bytecode *bytecode, moir_node *root)
+moir_generate_bytecode_signature;
 
 #define moir_generate_bytecode_statement_signature void moir_generate_bytecode_statement(moir_bytecode *bytecode, moir_node *node)
 moir_generate_bytecode_statement_signature;
@@ -199,8 +271,7 @@ moir_generate_bytecode_expression_signature;
 
 mos_string moir_skip_name(mos_string *iterator)
 {
-    mos_string blacklist = mos_s(" \t\n\r\"\\/+*-#!§$%&{}[]()<>|,;.:~'´`^°²³=");
-    mos_string name = mos_skip_name(iterator, blacklist);
+    mos_string name = mos_skip_default_name(iterator);
     mos_skip_white_space(iterator);
 
     return name;
@@ -225,6 +296,20 @@ void moir_append(moir_node ***tail, moir_node *node)
     *tail = &node->next;
 }
 
+moir_b8 moir_expression_types_are_compatible(moir_type_tag *left_type, moir_type_tag right_type)
+{
+    if (right_type == moir_type_tag_unresolved)
+        return true;
+
+    if (*left_type == moir_type_tag_unresolved)
+    {
+        *left_type = right_type;
+        return true;
+    }
+
+    return (*left_type == right_type);
+}
+
 moir_type_tag moir_get_expression_type(moir_node *node)
 {
     switch (node->tag)
@@ -239,14 +324,40 @@ moir_type_tag moir_get_expression_type(moir_node *node)
             return node->expression_name.variable->variable.type_tag;
         } break;
 
+        case moir_node_tag_expression_function_call:
+        {
+            moir_node *variable = node->expression_function_call.function->function.result_scope->scope.statements;
+            moir_assert_message(variable && !variable->next, "function must have exactly one result");
+            moir_assert(variable->tag == moir_node_tag_variable);
+
+            return variable->variable.type_tag;
+        } break;
+
         case moir_node_tag_expression_operator:
         {
-            moir_assert(node->expression_operator.type_tag != moir_type_tag_invalid);
+            if (node->expression_operator.type_tag == moir_type_tag_unresolved)
+            {
+                moir_type_tag left_type = moir_get_expression_type(node->expression_operator.left);
+                moir_type_tag right_type = left_type;
+
+                if (node->expression_operator.right)
+                    right_type = moir_get_expression_type(node->expression_operator.right);
+
+                moir_b8 ok = moir_expression_types_are_compatible(&left_type, right_type);
+                moir_assert(ok);
+
+                node->expression_operator.type_tag = right_type;
+            }
+
             return node->expression_operator.type_tag;
         } break;
 
-        default:
-            moir_assert(0);
+        case moir_node_tag_expression_unresolved_name:
+        {
+            return moir_type_tag_unresolved;
+        } break;
+
+        moir_cases_complete("tag %.*s", mos_fs(moir_node_tag_names[node->tag]));
     }
 
     return moir_type_tag_invalid;
@@ -278,36 +389,40 @@ moir_node * moir_parse_expression(moir_lang *lang, moir_node *parent)
     mos_string name = moir_skip_name(&lang->iterator);
     if (name.count)
     {
-        moir_b8 found = moir_false;
+        left = moir_new_node(lang, moir_node_tag_expression_unresolved_name);
+        left->parent = parent;
+        left->expression_unresolved_name.name = name;
 
-        moir_node *current_parent = parent;
-        while (current_parent && (current_parent->tag != moir_node_tag_scope))
-            current_parent = current_parent->parent;
-
-        while (current_parent)
+        if (mos_try_skip(&lang->iterator, mos_s("(")))
         {
-            moir_assert(current_parent->tag == moir_node_tag_scope);
+            mos_skip_white_space(&lang->iterator);
 
-            for (moir_node *it = current_parent->scope.statements; it; it = it->next)
+            left->expression_unresolved_name.is_function_call = moir_true;
+
+            moir_node **expressions_tail = &left->expression_unresolved_name.function_call_expressions;
+
+            moir_b8 found_close = moir_false;
+            while (lang->iterator.count)
             {
-                if ((it->tag == moir_node_tag_variable) && mos_are_equal(it->variable.name, name))
+                if (mos_try_skip(&lang->iterator, mos_s(")")))
                 {
-                    left = moir_new_node(lang, moir_node_tag_expression_name);
-                    left->parent = parent;
-                    left->expression_name.variable = it;
+                    mos_skip_white_space(&lang->iterator);
+                    found_close = moir_true;
                     break;
                 }
+
+                if (left->expression_unresolved_name.function_call_expressions)
+                {
+                    mos_skip(&lang->iterator, mos_s(","));
+                    mos_skip_white_space(&lang->iterator);
+                }
+
+                moir_node *expression = moir_parse_expression(lang, left);
+                moir_append(&expressions_tail, expression);
             }
 
-            if (left)
-                break;
-
-            current_parent = current_parent->parent;
-            while (current_parent && (current_parent->tag != moir_node_tag_scope))
-                current_parent = current_parent->parent;
+            moir_assert(found_close);
         }
-
-        moir_assert(left);
 
         if (add_negation)
         {
@@ -315,8 +430,9 @@ moir_node * moir_parse_expression(moir_lang *lang, moir_node *parent)
             node->parent = parent;
             node->expression_operator.left = left;
             node->expression_operator.operator_tag = mobc_instruction_tag_neg;
-            node->expression_operator.type_tag = moir_get_expression_type(left);
+            node->expression_operator.type_tag = moir_type_tag_unresolved;
             node->expression_operator.left->parent = node;
+            moir_get_expression_type(node);
             left = node;
         }
     }
@@ -400,13 +516,10 @@ moir_node * moir_parse_expression(moir_lang *lang, moir_node *parent)
                 node->expression_operator.left = left;
                 node->expression_operator.right = moir_parse_expression(lang, node);
                 node->expression_operator.operator_tag = mobc_instruction_tag_add + i;
-                moir_type_tag left_type = moir_get_expression_type(node->expression_operator.left);
-                moir_type_tag right_type = moir_get_expression_type(node->expression_operator.right);
-                moir_assert(left_type == right_type);
-                node->expression_operator.type_tag = left_type;
-
+                node->expression_operator.type_tag = moir_type_tag_unresolved;
                 node->expression_operator.left->parent = node;
                 node->expression_operator.right->parent = node;
+                moir_get_expression_type(node);
                 left = node;
                 break;
             }
@@ -447,7 +560,7 @@ moir_node * moir_parse_variable(moir_lang *lang, moir_node *parent, moir_node **
     {
         mos_skip_white_space(&lang->iterator);
 
-        moir_node *right = moir_parse_expression(lang, moir_null);
+        moir_node *right = moir_parse_expression(lang, parent);
         moir_assert(right);
 
         if (right->tag == moir_node_tag_expression_number)
@@ -474,8 +587,6 @@ moir_node * moir_parse_variable(moir_lang *lang, moir_node *parent, moir_node **
         }
         else
         {
-            moir_assert(moir_get_expression_type(node) == moir_get_expression_type(right));
-
             moir_node *left = moir_new_node(lang, moir_node_tag_expression_name);
             left->parent = parent;
             left->expression_name.variable = node;
@@ -507,13 +618,13 @@ void moir_parse_statements(moir_lang *lang, moir_node *parent)
 
     while (lang->iterator.count)
     {
-        if (mos_try_skip(&lang->iterator, s(";")))
+        if (mos_try_skip(&lang->iterator, mos_s(";")))
         {
             mos_skip_white_space(&lang->iterator);
             continue;
         }
 
-        if (mos_try_skip(&lang->iterator, s("}")))
+        if (mos_try_skip(&lang->iterator, mos_s("}")))
         {
             mos_skip_white_space(&lang->iterator);
             break;
@@ -540,8 +651,6 @@ moir_node * moir_parse_expression_or_assignment(moir_lang *lang, moir_node *pare
         moir_node *right = moir_parse_expression(lang, parent);
         moir_assert(right);
 
-        moir_assert(moir_get_expression_type(left) == moir_get_expression_type(right));
-
         moir_node *node = moir_new_node(lang, moir_node_tag_assignment);
         node->parent = parent;
         node->assignment.left  = left;
@@ -557,7 +666,7 @@ moir_node * moir_parse_expression_or_assignment(moir_lang *lang, moir_node *pare
 
 moir_parse_statement_signature
 {
-    if (mos_try_skip(&lang->iterator, s("{")))
+    if (mos_try_skip(&lang->iterator, mos_s("{")))
     {
         mos_skip_white_space(&lang->iterator);
 
@@ -611,10 +720,8 @@ moir_parse_statement_signature
 
         mos_skip_white_space(&lang->iterator);
 
-        node->loop_with_count.count_expression = moir_parse_expression(lang, loop_scope);
+        node->loop_with_count.count_expression = moir_parse_expression(lang, node);
         moir_assert(node->loop_with_count.count_expression);
-
-        moir_append(&scope_tail, node->loop_with_count.count_expression);
 
         // HACK: body should see loop scope
         // but loop scope should not iterate over budy
@@ -631,11 +738,145 @@ moir_parse_statement_signature
         moir_node *node = moir_parse_variable(lang, parent, statements_tail);
         moir_assert(node);
 
-        if (!mos_try_skip(&lang->iterator, s(";")))
+        if (!mos_try_skip(&lang->iterator, mos_s(";")))
         {
             moir_assert(moir_false);
         }
 
+        mos_skip_white_space(&lang->iterator);
+
+        return node;
+    }
+    else if (mos_are_equal(keyword, mos_s("func")))
+    {
+        mos_string name = moir_skip_name(&lang->iterator);
+        moir_assert(name.count);
+
+        moir_node *node = moir_new_node(lang, moir_node_tag_function);
+        node->function.name = name;
+        node->parent = parent;
+
+        moir_node *body_scope = moir_new_node(lang, moir_node_tag_scope);
+        body_scope->parent = node;
+        node->function.body_scope = body_scope;
+
+        moir_node **scope_tail = &body_scope->scope.statements;
+
+        {
+            mos_skip(&lang->iterator, mos_s("("));
+            mos_skip_white_space(&lang->iterator);
+
+            moir_u32 argument_count = 0;
+
+            moir_b8 found_close = moir_false;
+            while (lang->iterator.count)
+            {
+                if (mos_try_skip(&lang->iterator, mos_s(")")))
+                {
+                    mos_skip_white_space(&lang->iterator);
+                    found_close = moir_true;
+                    break;
+                }
+
+                if (argument_count)
+                {
+                    mos_skip(&lang->iterator, mos_s(","));
+                    mos_skip_white_space(&lang->iterator);
+                }
+
+                moir_node *argument = moir_parse_variable(lang, body_scope, &scope_tail);
+                assert(argument);
+                argument_count += 1;
+            }
+
+            node->function.argument_count = argument_count;
+
+            moir_assert(found_close);
+        }
+
+        moir_node *result_scope = moir_new_node(lang, moir_node_tag_scope);
+        result_scope->parent = node;
+        node->function.result_scope = result_scope;
+
+        moir_u32 result_count = 0;
+
+        if (mos_try_skip(&lang->iterator, mos_s("(")))
+        {
+            mos_skip_white_space(&lang->iterator);
+
+            moir_node **results_tail = &result_scope->scope.statements;
+
+            moir_b8 found_close = moir_false;
+            while (lang->iterator.count)
+            {
+                if (mos_try_skip(&lang->iterator, mos_s(")")))
+                {
+                    mos_skip_white_space(&lang->iterator);
+                    found_close = moir_true;
+                    break;
+                }
+
+                if (result_scope->scope.statements)
+                {
+                    mos_skip(&lang->iterator, mos_s(","));
+                    mos_skip_white_space(&lang->iterator);
+                }
+
+                moir_node *result = moir_parse_variable(lang, result_scope, &results_tail);
+                assert(result);
+
+                result_count += 1;
+            }
+
+            moir_assert(found_close);
+        }
+
+        node->function.result_count = result_count;
+
+        node->function.first_statement = moir_parse_statement(lang, body_scope, &scope_tail);
+
+        moir_append(statements_tail, node);
+
+        mos_skip_white_space(&lang->iterator);
+
+        // TODO: check all code paths return
+
+        return node;
+    }
+    else if (mos_are_equal(keyword, mos_s("return")))
+    {
+        moir_node *parent_function = parent;
+        while (parent_function && (parent_function->tag != moir_node_tag_function))
+            parent_function = parent_function->parent;
+
+        moir_assert(parent_function);
+
+        moir_node *node = moir_new_node(lang, moir_node_tag_function_return);
+        node->parent = parent;
+        node->function_return.function = parent_function;
+
+        moir_node **expressions_tail = &node->function_return.expressions;
+
+        {
+            moir_node *result = parent_function->function.result_scope->scope.statements;
+            while (result)
+            {
+                moir_node *expression = moir_parse_expression(lang, node);
+                moir_append(&expressions_tail, expression);
+
+                result = result->next;
+
+                if (result)
+                {
+                    mos_skip(&lang->iterator, mos_s(","));
+                    mos_skip_white_space(&lang->iterator);
+                }
+            }
+        }
+
+        moir_append(statements_tail, node);
+
+        mos_skip(&lang->iterator, mos_s(";"));
         mos_skip_white_space(&lang->iterator);
 
         return node;
@@ -649,7 +890,7 @@ moir_parse_statement_signature
 
         moir_append(statements_tail, node);
 
-        if (!mos_try_skip(&lang->iterator, s(";")))
+        if (!mos_try_skip(&lang->iterator, mos_s(";")))
         {
             moir_assert(moir_false);
         }
@@ -662,6 +903,32 @@ moir_parse_statement_signature
     return moir_null;
 }
 
+moir_node * moir_resolve_name(moir_node *parent, mos_string name)
+{
+    moir_node *current_parent = parent;
+    while (current_parent && (current_parent->tag != moir_node_tag_scope))
+        current_parent = current_parent->parent;
+
+    while (current_parent)
+    {
+        moir_assert(current_parent->tag == moir_node_tag_scope);
+
+        for (moir_node *it = current_parent->scope.statements; it; it = it->next)
+        {
+            if ((it->tag == moir_node_tag_variable) && mos_are_equal(it->variable.name, name))
+                return it;
+            else if ((it->tag == moir_node_tag_function) && mos_are_equal(it->function.name, name))
+                return it;
+        }
+
+        current_parent = current_parent->parent;
+        while (current_parent && (current_parent->tag != moir_node_tag_scope))
+            current_parent = current_parent->parent;
+    }
+
+    return moir_null;
+}
+
 moir_compile_signature
 {
     lang->iterator = source;
@@ -669,6 +936,111 @@ moir_compile_signature
 
     moir_node *root = moir_new_node(lang, moir_node_tag_scope);
     moir_parse_statements(lang, root);
+
+    // resolve names
+    for (moir_u32 i = 0; i < lang->node_used_count; i++)
+    {
+        moir_node *node = &lang->node_buffer[i];
+        if (node->tag != moir_node_tag_expression_unresolved_name)
+            continue;
+
+        moir_node *name_node = moir_resolve_name(node->parent, node->expression_unresolved_name.name);
+        moir_assert(name_node);
+
+        if (name_node->tag == moir_node_tag_variable)
+        {
+            moir_assert(!node->expression_unresolved_name.is_function_call);
+
+            node->tag                      = moir_node_tag_expression_name;
+            node->expression_name.variable = name_node;
+        }
+        else
+        {
+            moir_assert(name_node->tag == moir_node_tag_function)
+            moir_assert(node->expression_unresolved_name.is_function_call);
+
+            moir_node *expressions = node->expression_unresolved_name.function_call_expressions;
+            node->tag                                  = moir_node_tag_expression_function_call;
+            node->expression_function_call.function    = name_node;
+            node->expression_function_call.expressions = expressions;
+        }
+    }
+
+    // resolve types
+    {
+        moir_b8 do_repeat = moir_true;
+        while (do_repeat)
+        {
+            do_repeat = moir_false;
+            moir_b8 has_unresolved_types = moir_false;
+
+            for (moir_u32 i = 0; i < lang->node_used_count; i++)
+            {
+                moir_node *node = &lang->node_buffer[i];
+
+                switch (node->tag)
+                {
+                    case moir_node_tag_variable:
+                    case moir_node_tag_scope:
+                    case moir_node_tag_function:
+                    case moir_node_tag_function_return:
+                    case moir_node_tag_expression_number:
+                    case moir_node_tag_expression_name:
+                    case moir_node_tag_expression_function_call:
+                    break;
+
+                    case moir_node_tag_assignment:
+                    {
+                        moir_type_tag left_type = moir_get_expression_type(node->assignment.left);
+                        moir_type_tag assignment_type = left_type;
+                        moir_b8 ok = moir_expression_types_are_compatible(&left_type, moir_get_expression_type(node->assignment.right));
+                        moir_assert(ok);
+
+                        do_repeat |= (assignment_type != left_type);
+                        has_unresolved_types |= (left_type == moir_type_tag_unresolved);
+                    } break;
+
+                    case moir_node_tag_loop_with_count:
+                    {
+                        moir_type_tag *left_type_tag;
+                        moir_type_tag iterator_type_tag;
+                        if (node->loop_with_count.iterator->tag == moir_node_tag_variable)
+                        {
+                            left_type_tag = &node->loop_with_count.iterator->variable.type_tag;
+                        }
+                        else
+                        {
+                            iterator_type_tag = moir_get_expression_type(node->loop_with_count.iterator);
+                            left_type_tag = &iterator_type_tag;
+                        }
+
+                        iterator_type_tag = *left_type_tag;
+
+                        moir_b8 ok = moir_expression_types_are_compatible(left_type_tag, moir_get_expression_type(node->loop_with_count.count_expression));
+                        moir_assert(ok);
+
+                        do_repeat |= (iterator_type_tag != *left_type_tag);
+                        has_unresolved_types |= (*left_type_tag == moir_type_tag_unresolved);
+
+                        iterator_type_tag = *left_type_tag;
+                    } break;
+
+                    case moir_node_tag_expression_operator:
+                    {
+                        moir_type_tag type_tag = node->expression_operator.type_tag;
+                        moir_get_expression_type(node);
+
+                        do_repeat |= (type_tag != node->expression_operator.type_tag);
+                        has_unresolved_types |= (node->expression_operator.type_tag == moir_type_tag_unresolved);
+                    } break;
+
+                    moir_cases_complete("tag %.*s", mos_fs(moir_node_tag_names[node->tag]));
+                }
+            }
+
+            moir_assert(do_repeat || !has_unresolved_types);
+        }
+    }
 
     return root;
 }
@@ -693,7 +1065,7 @@ moir_register * moir_find_expression(moir_bytecode *bytecode, moir_node *node)
     {
         case moir_node_tag_expression_number:
         {
-            for (moir_u32 i = 0; i < bytecode->register_used_count; i++)
+            for (moir_u32 i = bytecode->register_function_offset; i < bytecode->register_used_count; i++)
             {
                 if ((bytecode->registers[i].node->tag == moir_node_tag_expression_number) && (bytecode->registers[i].node->expression_number.type_tag == node->expression_number.type_tag) && (bytecode->registers[i].node->expression_number.u32_value == node->expression_number.u32_value))
                 {
@@ -710,7 +1082,7 @@ moir_register * moir_find_expression(moir_bytecode *bytecode, moir_node *node)
         } break;
     }
 
-    for (moir_u32 i = 0; i < bytecode->register_used_count; i++)
+    for (moir_u32 i = bytecode->register_function_offset; i < bytecode->register_used_count; i++)
     {
         if (bytecode->registers[i].node == node)
             return bytecode->registers + i;
@@ -734,10 +1106,61 @@ moir_register * moir_new_register(moir_bytecode *bytecode, moir_node *node)
     moir_register *result = bytecode->registers + bytecode->register_used_count;
 
     result->node  = node;
-    result->index = bytecode->register_used_count;
+    result->index = bytecode->register_used_count - bytecode->register_function_offset;
     bytecode->register_used_count += 1;
 
     return result;
+}
+
+moir_function * moir_get_function(moir_bytecode *bytecode, moir_node *node)
+{
+    moir_assert(node->tag == moir_node_tag_function);
+    for (moir_u32 i = 0; i < bytecode->function_used_count; i++)
+    {
+        if (bytecode->functions[i].node == node)
+            return &bytecode->functions[i];
+    }
+
+    return moir_null;
+}
+
+moir_function * moir_add_function(moir_bytecode *bytecode, moir_node *node, moir_u32 body_instruction_index)
+{
+    moir_assert(moir_get_function(bytecode, node) == moir_null);
+    moir_assert(bytecode->function_used_count < bytecode->function_count);
+    moir_function *function = &bytecode->functions[bytecode->function_used_count];
+    bytecode->function_used_count += 1;
+
+    function->node = node;
+    function->body_instruction_index = body_instruction_index;
+    return function;
+}
+
+moir_call * moir_add_call(moir_bytecode *bytecode, moir_u32 instruction_index, moir_node *function)
+{
+    moir_assert(function->tag == moir_node_tag_function);
+    moir_assert(bytecode->call_used_count < bytecode->call_count);
+    moir_call *call = &bytecode->calls[bytecode->call_used_count];
+    bytecode->call_used_count += 1;
+
+    call->function = function;
+    call->instruction_index = instruction_index;
+    return call;
+}
+
+moir_generate_bytecode_signature
+{
+    moir_generate_bytecode_statement(bytecode, root);
+
+    // patch function calls after all functions have body instruction index
+    for (moir_u32 i = 0; i < bytecode->call_used_count; i++)
+    {
+        moir_call call = bytecode->calls[i];
+        mobc_instruction *instruction = &bytecode->instructions[call.instruction_index];
+
+        moir_function *function = moir_get_function(bytecode, call.function);
+        instruction->call.next_instruction_index = function->body_instruction_index * mobc_instruction_word_count;
+    }
 }
 
 moir_generate_bytecode_expression_signature
@@ -777,13 +1200,110 @@ moir_generate_bytecode_expression_signature
             return a->index;
         } break;
 
-        default:
-            moir_assert(false);
+        case moir_node_tag_expression_function_call:
+        {
+            moir_u16 argument_count = (moir_u16) (node->expression_function_call.function->function.argument_count);
+
+            for (moir_node *expression = node->expression_function_call.expressions; expression; expression = expression->next)
+                moir_generate_bytecode_expression(bytecode, expression);
+
+            moir_u16 argument_offset = (moir_u16) (bytecode->register_used_count - bytecode->register_function_offset);
+
+            // add registers to store arguments to function continuously
+            for (moir_node *expression = node->expression_function_call.expressions; expression; expression = expression->next)
+            {
+                moir_new_register(bytecode, node);
+                mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_register_push);
+                instruction->register_push.source = moir_find_expression(bytecode, expression)->index;
+            }
+
+            moir_assert(bytecode->register_used_count >= argument_count);
+
+            moir_add_call(bytecode, bytecode->instruction_used_count, node->expression_function_call.function);
+
+            mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_call);
+            instruction->call.argument_offset = argument_offset;
+            instruction->call.argument_count  = argument_count;
+
+            moir_u32 first_result = bytecode->register_used_count - bytecode->register_function_offset;
+
+            for (moir_node *result = node->expression_function_call.function->function.result_scope->scope.statements; result; result = result->next)
+                moir_new_register(bytecode, node); // HACK: they all point to the expression_function_call
+
+            return first_result;
+        } break;
+
+        moir_cases_complete("tag %.*s", mos_fs(moir_node_tag_names[node->tag]));
     }
 
     return -1;
 }
 
+void moir_add_statement_registers(moir_bytecode *bytecode, moir_node *node)
+{
+    switch (node->tag)
+    {
+    case moir_node_tag_variable:
+    {
+        moir_new_register(bytecode, node);
+
+        mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_push);
+        instruction->push.value = node->variable.u32_value;
+    } break;
+
+    case moir_node_tag_assignment:
+    {
+        // order is kinda important?
+        moir_add_statement_registers(bytecode, node->assignment.right);
+        moir_add_statement_registers(bytecode, node->assignment.left);
+    } break;
+
+    case moir_node_tag_expression_number:
+    {
+        if (moir_find_expression(bytecode, node))
+            break;
+
+        moir_new_register(bytecode, node);
+
+        mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_push);
+        instruction->push.value = node->expression_number.u32_value;
+    } break;
+
+    case moir_node_tag_expression_function_call:
+    {
+        for (moir_node *expression = node->expression_function_call.expressions; expression; expression = expression->next)
+            moir_add_statement_registers(bytecode, expression);
+    } break;
+
+    case moir_node_tag_expression_operator:
+    {
+        moir_add_statement_registers(bytecode, node->expression_operator.left);
+
+        if (node->expression_operator.right)
+            moir_add_statement_registers(bytecode, node->expression_operator.right);
+    } break;
+    }
+}
+
+void moir_generate_bytecode_statements(moir_bytecode *bytecode, moir_node *statements)
+{
+    for (moir_node *it = statements; it; it = it->next)
+        moir_add_statement_registers(bytecode, it);
+
+    for (moir_node *it = statements; it; it = it->next)
+        moir_generate_bytecode_statement(bytecode, it);
+}
+
+void moir_generate_scope_close(moir_bytecode *bytecode, moir_u32 open_register_used_count)
+{
+    moir_assert(bytecode->register_used_count >= open_register_used_count);
+    if (bytecode->register_used_count > open_register_used_count)
+    {
+        mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_pop);
+        instruction->pop.register_count = bytecode->register_used_count - open_register_used_count;
+        bytecode->register_used_count = open_register_used_count;
+    }
+}
 
 moir_generate_bytecode_statement_signature
 {
@@ -793,137 +1313,79 @@ moir_generate_bytecode_statement_signature
         {
             moir_u32 register_used_count = bytecode->register_used_count;
 
-            for (moir_node *it = node->scope.statements; it; it = it->next)
-            {
-                if (it->tag == moir_node_tag_variable)
-                {
-                    moir_new_register(bytecode, it);
+            moir_generate_bytecode_statements(bytecode, node->scope.statements);
 
-                    mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_push);
-                    instruction->push.value = it->variable.u32_value;
-                }
-            }
-
-            for (moir_node *it = node->scope.statements; it; it = it->next)
-            {
-                if (it->tag == moir_node_tag_expression_number)
-                {
-                    if (moir_find_expression(bytecode, it))
-                        break;
-
-                    moir_new_register(bytecode, it);
-
-                    mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_push);
-                    instruction->push.value = it->expression_number.u32_value;
-                }
-            }
-
-            for (moir_node *it = node->scope.statements; it; it = it->next)
-            {
-                moir_generate_bytecode_statement(bytecode, it);
-            }
-
-            if (register_used_count < bytecode->register_used_count)
-            {
-                mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_pop);
-                instruction->pop.register_count = bytecode->register_used_count - register_used_count;
-
-                bytecode->register_used_count = register_used_count;
-            }
+            moir_generate_scope_close(bytecode, register_used_count);
         } break;
 
         case moir_node_tag_loop_with_count:
         {
             moir_u32 register_used_count = bytecode->register_used_count;
 
-            moir_type_tag iterator_type_tag;
-            if (node->loop_with_count.iterator->tag == moir_node_tag_variable)
-                iterator_type_tag = node->loop_with_count.iterator->variable.type_tag;
-            else
-                iterator_type_tag = moir_get_expression_type(node->loop_with_count.iterator);
+            moir_type_tag iterator_type_tag = node->loop_with_count.iterator->variable.type_tag;
 
-            moir_assert(iterator_type_tag == moir_get_expression_type(node->loop_with_count.count_expression));
+            moir_generate_bytecode_statements(bytecode, node->loop_with_count.iterator);
+            moir_generate_bytecode_statements(bytecode, node->loop_with_count.count_expression);
 
-            {
-                moir_generate_bytecode_statement(bytecode, node->loop_with_count.scope);
+            // optimization: push or find constant 1
+            moir_node one_node = {0};
+            one_node.tag = moir_node_tag_expression_number;
+            one_node.expression_number.u32_value = 1;
+            one_node.expression_number.type_tag  = moir_type_tag_u32;
+            moir_add_statement_registers(bytecode, &one_node);
+            mobc_register one_register = moir_find_expression(bytecode, &one_node)->index;
 
-                // HACK: remove pop from previous scope
-                moir_assert(bytecode->instruction_used_count);
-                bytecode->instruction_used_count -= 1;
-                moir_assert(bytecode->instructions[bytecode->instruction_used_count].tag == mobc_instruction_tag_pop);
+            mobc_register iterator_register = moir_find_expression(bytecode, node->loop_with_count.iterator)->index;
 
-                bytecode->register_used_count += bytecode->instructions[bytecode->instruction_used_count].pop.register_count;
-            }
-
-            mobc_instruction *one = moir_new_instruction(bytecode, mobc_instruction_tag_push);
-            one->push.value = 1;
-            mobc_register one_register = moir_new_register(bytecode, node)->index;
-
+            moir_u32 body_register_used_count     = bytecode->register_used_count;
             moir_u32 body_begin_instruction_count = bytecode->instruction_used_count;
 
-            moir_u32 body_register_used_count = bytecode->register_used_count;
-
-            mobc_instruction *compare = moir_new_instruction(bytecode, mobc_instruction_tag_less);
-            compare->less.operator_mask = moir_get_operator_mask(iterator_type_tag);
-            compare->less.left  = moir_find_expression(bytecode, node->loop_with_count.iterator)->index;
-            compare->less.right = moir_find_expression(bytecode, node->loop_with_count.count_expression)->index;
-
-            moir_register *condition = moir_new_register(bytecode, node);
-
-            mobc_instruction *jump_break = moir_new_instruction(bytecode, mobc_instruction_tag_jump_on_false);
-            jump_break->jump_on_false.condition = condition->index;
-
+            // condition
+            mobc_instruction *jump_break;
             {
-                moir_generate_bytecode_statement(bytecode, node->loop_with_count.body);
+                mobc_instruction *compare = moir_new_instruction(bytecode, mobc_instruction_tag_less);
+                compare->less.operator_mask = moir_get_operator_mask(iterator_type_tag);
+                compare->less.left  = iterator_register;
+                compare->less.right = moir_find_expression(bytecode, node->loop_with_count.count_expression)->index;
 
-                // HACK: remove pop from previous scope
-                if (bytecode->instructions[bytecode->instruction_used_count - 1].tag == mobc_instruction_tag_pop)
-                {
-                    moir_assert(bytecode->instruction_used_count);
-                    bytecode->instruction_used_count -= 1;
-                    moir_assert(bytecode->instructions[bytecode->instruction_used_count].tag == mobc_instruction_tag_pop);
-
-                    bytecode->register_used_count += bytecode->instructions[bytecode->instruction_used_count].pop.register_count;
-                }
+                moir_register *condition = moir_new_register(bytecode, node);
+                jump_break = moir_new_instruction(bytecode, mobc_instruction_tag_jump_on_false);
+                jump_break->jump_on_false.condition = condition->index;
             }
 
-            // increment iterator
+            // body
+            moir_generate_bytecode_statements(bytecode, node->loop_with_count.body);
+
+            // advance
             {
                 mobc_instruction *increment = moir_new_instruction(bytecode, mobc_instruction_tag_add);
                 increment->add.operator_mask = moir_get_operator_mask(iterator_type_tag);
-                increment->add.left          = compare->less.left;
+                increment->add.left          = iterator_register;
                 increment->add.right         = one_register;
 
                 mobc_register increment_result = moir_new_register(bytecode, node)->index;
 
                 mobc_instruction *move = moir_new_instruction(bytecode, mobc_instruction_tag_register_move);
-                move->register_move.destination = compare->less.left;
+                move->register_move.destination = iterator_register;
                 move->register_move.source      = increment_result;
             }
 
-            // body pop
+            // pop body
+            moir_generate_scope_close(bytecode, body_register_used_count);
+
+            // jump to start
             {
-                moir_assert(bytecode->register_used_count > body_register_used_count);
-                mobc_instruction *pop = moir_new_instruction(bytecode, mobc_instruction_tag_pop);
-                pop->pop.register_count = bytecode->register_used_count - body_register_used_count;
-                bytecode->register_used_count = body_register_used_count;
+                mobc_instruction *jump_continue = moir_new_instruction(bytecode, mobc_instruction_tag_jump);
+                jump_continue->jump.next_instruction_index = body_begin_instruction_count * mobc_instruction_word_count;
             }
 
-            mobc_instruction *jump_continue = moir_new_instruction(bytecode, mobc_instruction_tag_jump);
-            jump_continue->jump.next_instruction_index = body_begin_instruction_count * mobc_instruction_word_count;
+            moir_u32 body_end_instruction_count = bytecode->instruction_used_count;
+            jump_break->jump_on_false.next_instruction_index = body_end_instruction_count * mobc_instruction_word_count;
 
-            jump_break->jump_on_false.next_instruction_index = bytecode->instruction_used_count * mobc_instruction_word_count;
-
-            // we jump after the less, which pushed a register, we didn't clean
+            // pop loop scope
+            // we jump after the less, which pushed a register, we didn't pop yet
             bytecode->register_used_count += 1;
-
-            if (register_used_count < bytecode->register_used_count)
-            {
-                mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_pop);
-                instruction->pop.register_count = bytecode->register_used_count - register_used_count;
-
-                bytecode->register_used_count = register_used_count;
-            }
+            moir_generate_scope_close(bytecode, register_used_count);
         } break;
 
         case moir_node_tag_variable:
@@ -946,7 +1408,61 @@ moir_generate_bytecode_statement_signature
             instruction->register_move.source      = right;
         } break;
 
-        moir_cases_complete(node->tag);
+        case moir_node_tag_function:
+        {
+            moir_add_function(bytecode, node, bytecode->instruction_used_count);
+
+            bytecode->register_function_offset = bytecode->register_used_count;
+
+            // simulate stack when called
+            for (moir_node *argument = node->function.body_scope->scope.statements; argument != node->function.first_statement; argument = argument->next)
+                moir_new_register(bytecode, argument);
+
+            moir_node body_scope = {0};
+            body_scope.tag = moir_node_tag_scope;
+            body_scope.scope.statements = node->function.first_statement;
+            moir_generate_bytecode_statements(bytecode, &body_scope);
+
+            // HACK: TODO: this should never be reached?
+            // we need to add a return?
+
+            // pop scope
+            moir_u32 register_used_count = bytecode->register_function_offset - 2 + node->function.argument_count + node->function.result_count;
+            moir_generate_scope_close(bytecode, register_used_count);
+
+            bytecode->register_function_offset = 0;
+        } break;
+
+        case moir_node_tag_function_return:
+        {
+            moir_u32 result_count = 0;
+            for (moir_node *expression = node->function_return.expressions; expression; expression = expression->next)
+            {
+                mobc_register right = moir_generate_bytecode_expression(bytecode, expression);
+
+                if (right != result_count)
+                {
+                    mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_register_move);
+                    instruction->register_move.destination = result_count;
+                    instruction->register_move.source      = right;
+                }
+
+                result_count += 1;
+            }
+
+            moir_node *function = node->function_return.function;
+            moir_u32 register_used_count = bytecode->register_function_offset + function->function.result_count;
+            moir_assert(bytecode->register_used_count >= register_used_count);
+            if (bytecode->register_used_count > register_used_count)
+            {
+                mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_pop);
+                instruction->pop.register_count = bytecode->register_used_count - register_used_count;
+            }
+
+            mobc_instruction *instruction = moir_new_instruction(bytecode, mobc_instruction_tag_call_return);
+        } break;
+
+        moir_cases_complete("tag %.*s", mos_fs(moir_node_tag_names[node->tag]));
     }
 }
 
