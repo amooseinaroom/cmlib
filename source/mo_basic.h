@@ -15,6 +15,7 @@ extern "C" {
 #define assert(x)  mop_assert(x)
 #define require(x) mop_require(x)
 
+#define unreachable_codepath() assert_message(false, "unreachable code path");
 #define cases_complete(format, ...)  mop_cases_complete(format, __VA_ARGS__)
 
 // for compatibilty with other libs

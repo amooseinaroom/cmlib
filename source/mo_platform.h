@@ -324,6 +324,9 @@ mop_thread_wait_for_exit_signature;
 #define mop_thread_kill_signature void mop_thread_kill(mop_platform *platform, mop_thread *thread)
 mop_thread_kill_signature;
 
+#define mop_bit_count_u64_signature mop_u32 mop_bit_count_u64(mop_u64 value)
+mop_bit_count_u64_signature;
+
 #define mop_atomic_increment_s64_signature s64 mop_atomic_increment_s64(mop_platform *platform, s64 *value)
 mop_atomic_increment_s64_signature;
 
@@ -1421,6 +1424,15 @@ mop_thread_kill_signature
     mop_require(CloseHandle(thread->handle));
 
     *thread  = mop_sl(mop_thread) {0};
+}
+
+mop_bit_count_u64_signature
+{
+    mop_u32 index = 0;
+    mop_b8 is_not_zero = _BitScanReverse64(&index, value);
+    mop_assert(is_not_zero || index == 0);
+
+    return index + 1;
 }
 
 mop_atomic_increment_s64_signature
