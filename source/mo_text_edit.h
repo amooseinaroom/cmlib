@@ -12,8 +12,8 @@ extern "C" {
 #define mote_assert_message(...)
 #endif
 
-#if !defined mote_require_mesage
-#define mote_require_mesage(...)
+#if !defined mote_require_message
+#define mote_require_message(...)
 #endif
 
 #define mote_assert(x)  mote_assert_message(x, "")

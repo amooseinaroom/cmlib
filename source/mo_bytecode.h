@@ -12,8 +12,8 @@ extern "C" {
 #define mobc_assert_message(...)
 #endif
 
-#if !defined mobc_require_mesage
-#define mobc_require_mesage(...)
+#if !defined mobc_require_message
+#define mobc_require_message(...)
 #endif
 
 #define mobc_assert(x)  mobc_assert_message(x, "")

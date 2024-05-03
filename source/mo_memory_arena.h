@@ -12,8 +12,8 @@ extern "C" {
 #define moma_assert_message(...)
 #endif
 
-#if !defined moma_require_mesage
-#define moma_require_mesage(...)
+#if !defined moma_require_message
+#define moma_require_message(...)
 #endif
 
 #define moma_assert(x)  moma_assert_message(x, "")

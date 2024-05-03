@@ -33,8 +33,8 @@ extern "C" {
 #define moui_assert_message(...)
 #endif
 
-#if !defined moui_require_mesage
-#define moui_require_mesage(...)
+#if !defined moui_require_message
+#define moui_require_message(...)
 #endif
 
 #define moui_assert(x)  moui_assert_message(x, "")

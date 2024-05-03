@@ -10,8 +10,8 @@ extern "C" {
 #define mor_assert_message(...)
 #endif
 
-#if !defined mor_require_mesage
-#define mor_require_mesage(...)
+#if !defined mor_require_message
+#define mor_require_message(...)
 #endif
 
 #define mor_assert(x)  mor_assert_message(x, "")

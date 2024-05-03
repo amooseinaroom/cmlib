@@ -337,19 +337,19 @@ mop_thread_kill_signature;
 #define mop_bit_count_u64_signature mop_u32 mop_bit_count_u64(mop_u64 value)
 mop_bit_count_u64_signature;
 
-#define mop_atomic_increment_s64_signature s64 mop_atomic_increment_s64(mop_platform *platform, s64 *value)
+#define mop_atomic_increment_s64_signature mop_s64 mop_atomic_increment_s64(mop_platform *platform, mop_s64 *value)
 mop_atomic_increment_s64_signature;
 
-#define mop_atomic_decrement_s64_signature s64 mop_atomic_decrement_s64(mop_platform *platform, s64 *value)
+#define mop_atomic_decrement_s64_signature mop_s64 mop_atomic_decrement_s64(mop_platform *platform, mop_s64 *value)
 mop_atomic_decrement_s64_signature;
 
-#define mop_atomic_add_s64_signature s64 mop_atomic_add_s64(mop_platform *platform, s64 *value, s64 delta)
+#define mop_atomic_add_s64_signature mop_s64 mop_atomic_add_s64(mop_platform *platform, mop_s64 *value, mop_s64 delta)
 mop_atomic_add_s64_signature;
 
-#define mop_atomic_sub_s64_signature s64 mop_atomic_sub_s64(mop_platform *platform, s64 *value, s64 delta)
+#define mop_atomic_sub_s64_signature mop_s64 mop_atomic_sub_s64(mop_platform *platform, mop_s64 *value, mop_s64 delta)
 mop_atomic_sub_s64_signature;
 
-#define mop_atomic_compare_exchange_s32_signature s64 mop_atomic_compare_exchange_s32(mop_platform *platform, s32 *value, s32 expected_value, s32 new_value)
+#define mop_atomic_compare_exchange_s32_signature mop_s64 mop_atomic_compare_exchange_s32(mop_platform *platform, s32 *value, s32 expected_value, s32 new_value)
 
 #define mop_execute_command_siganture mop_execute_command_result mop_execute_command(mop_string output_buffer, mop_string command_line)
 mop_execute_command_siganture;
@@ -1256,7 +1256,7 @@ mop_create_directory_siganture
     mop_u8 cpath[MAX_PATH];
     mop_win32_to_cpath(cpath, path);
 
-    mop_b8 ok = CreateDirectory(cpath, mop_null);
+    mop_b8 ok = CreateDirectory((char *) cpath, mop_null);
     if (!ok)
     {
         if (GetLastError() == ERROR_ALREADY_EXISTS)
@@ -1469,7 +1469,7 @@ mop_thread_kill_signature
 mop_bit_count_u64_signature
 {
     mop_u32 index = 0;
-    mop_b8 is_not_zero = _BitScanReverse64(&index, value);
+    mop_b8 is_not_zero = _BitScanReverse64((unsigned long *) &index, value);
     mop_assert(is_not_zero || index == 0);
 
     return index + 1;
@@ -1513,7 +1513,7 @@ mop_execute_command_siganture
     start_info.hStdError = write_pipe;
     start_info.hStdOutput = write_pipe;
     PROCESS_INFORMATION process_info = {0};
-    mop_b8 ok = CreateProcessA(null, command_line_buffer, mop_null, mop_null, mop_true, 0, mop_null, mop_null, &start_info, &process_info);
+    mop_b8 ok = CreateProcessA(null, (char *) command_line_buffer, mop_null, mop_null, mop_true, 0, mop_null, mop_null, &start_info, &process_info);
 
     string output = output_buffer;
     mop_s32 exit_code = 0;
@@ -1525,7 +1525,7 @@ mop_execute_command_siganture
             mop_u8 buffer[1024];
 
             mop_u32 read_count;
-            mop_b8 ok = ReadFile(write_pipe, buffer, mop_carray_count(buffer), &read_count, mop_null);
+            mop_b8 ok = ReadFile(write_pipe, buffer, mop_carray_count(buffer), (DWORD *) &read_count, mop_null);
             if (!ok || read_count == 0)
                 break;
 
@@ -1536,7 +1536,7 @@ mop_execute_command_siganture
             }
         }
 
-        mop_require(GetExitCodeProcess(process_info.hProcess, &exit_code));
+        mop_require(GetExitCodeProcess(process_info.hProcess, (DWORD *) &exit_code));
 
         CloseHandle(process_info.hProcess);
         CloseHandle(process_info.hThread);

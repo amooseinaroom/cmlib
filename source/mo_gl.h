@@ -10,8 +10,8 @@ extern "C" {
 #define mogl_assert_message(...)
 #endif
 
-#if !defined mogl_require_mesage
-#define mogl_require_mesage(...)
+#if !defined mogl_require_message
+#define mogl_require_message(...)
 #endif
 
 #define mogl_assert(x)  mogl_assert_message(x, "")

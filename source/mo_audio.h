@@ -14,8 +14,8 @@ extern "C" {
 #define moa_assert_message(...)
 #endif
 
-#if !defined moa_require_mesage
-#define moa_require_mesage(...)
+#if !defined moa_require_message
+#define moa_require_message(...)
 #endif
 
 #define moa_assert(x)  moa_assert_message(x, "")
@@ -403,14 +403,14 @@ moa_load_wave_samples_signature
             {
                 wave.samples.count = chunk->size;
                 wave.sample_count  = chunk->size / wave.bytes_per_sample_per_channel;
-                wave.duration = (f32) wave.sample_count / wave.samples_per_second;
+                wave.duration = (moa_f32) wave.sample_count / wave.samples_per_second;
 
                 moa_advance_type(&it, moa_wave_chunk_header);
                 wave.samples.base = moa_advance(&it, chunk->size);
 
                 // skipp odd padding
                 if (chunk->size & 1)
-                    moa_advance_type(&it, u8);
+                    moa_advance_type(&it, moa_u8);
             } break;
 
             default:
