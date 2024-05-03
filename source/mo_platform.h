@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 typedef unsigned char      mop_u8;
+typedef unsigned short     mop_u16;
 typedef unsigned int       mop_u32;
 typedef unsigned long long mop_u64;
 
@@ -116,7 +117,7 @@ typedef struct
 {
     mop_point size;
     mop_point relative_mouse_position;
-    b8        requested_close;
+    mop_b8    requested_close;
 } mop_window_info;
 
 typedef struct
@@ -154,7 +155,7 @@ typedef struct
             mop_b8 with_control : 1;
         };
 
-        u8 mask;
+        mop_u8 mask;
     };
 } mop_character;
 
@@ -214,15 +215,15 @@ typedef enum
 
 typedef struct
 {
-    u16 millisecond;
-    u8  second;
-    u8  minute;
-    u8  hour;
-    u8  day;
-    u8  month;
-    u16 year;
+    mop_u16 millisecond;
+    mop_u8  second;
+    mop_u8  minute;
+    mop_u8  hour;
+    mop_u8  day;
+    mop_u8  month;
+    mop_u16 year;
 
-    u8 week_day;
+    mop_u8 week_day;
 } mop_date_and_time;
 
 typedef struct
@@ -316,13 +317,13 @@ mop_allocate_signature;
 #define mop_free_signature void mop_free(mop_platform *platform, mop_u8 *base)
 mop_free_signature;
 
-#define mop_sleep_milliseconds_signature void mop_sleep_milliseconds(mop_platform *platform, u32 milliseconds)
+#define mop_sleep_milliseconds_signature void mop_sleep_milliseconds(mop_platform *platform, mop_u32 milliseconds)
 mop_sleep_milliseconds_signature;
 
-#define mop_thread_function(name) s32 name(u8 *user_data)
+#define mop_thread_function(name) mop_s32 name(mop_u8 *user_data)
 typedef mop_thread_function((*mop_thread_function_type));
 
-#define mop_thread_init_signature void mop_thread_init(mop_platform *platform, mop_thread *thread, mop_thread_function_type function, u8 *user_data)
+#define mop_thread_init_signature void mop_thread_init(mop_platform *platform, mop_thread *thread, mop_thread_function_type function, mop_u8 *user_data)
 mop_thread_init_signature;
 
 #define mop_thread_start_signature void mop_thread_start(mop_platform *platform, mop_thread *thread)
@@ -349,7 +350,7 @@ mop_atomic_add_s64_signature;
 #define mop_atomic_sub_s64_signature mop_s64 mop_atomic_sub_s64(mop_platform *platform, mop_s64 *value, mop_s64 delta)
 mop_atomic_sub_s64_signature;
 
-#define mop_atomic_compare_exchange_s32_signature mop_s64 mop_atomic_compare_exchange_s32(mop_platform *platform, s32 *value, s32 expected_value, s32 new_value)
+#define mop_atomic_compare_exchange_s32_signature mop_s64 mop_atomic_compare_exchange_s32(mop_platform *platform, mop_s32 *value, mop_s32 expected_value, mop_s32 new_value)
 
 #define mop_execute_command_siganture mop_execute_command_result mop_execute_command(mop_string output_buffer, mop_string command_line)
 mop_execute_command_siganture;
@@ -430,6 +431,7 @@ mop_key_poll_update_signature;
 #if defined(_WIN32) || defined(WIN32)
 
 #include <windows.h>
+#include <stdio.h>
 #include <intrin.h>
 
 #pragma comment(lib, "gdi32")
@@ -579,7 +581,7 @@ mop_fatal_error_signature
         text.count -= count;
     }
 
-    u32 error = GetLastError();
+    mop_u32 error = GetLastError();
     if (error)
     {
         mop_s32 count = snprintf((char *) text.base, text.count, "GetLastError() = %i\n\n", error);
@@ -732,7 +734,7 @@ void mop_win32_add_character(mop_platform *platform, mop_u32 code, mop_b8 is_sym
     {
         if (override_previous_character)
         {
-            assert(platform->character_count);
+            mop_assert(platform->character_count);
             platform->character_count -= 1;
         }
 
@@ -765,14 +767,14 @@ mop_get_command_line_info_signature
         mop_s32 byte_count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, arguments[i], -1, mop_null, 0, mop_null, mop_null);
         mop_require(byte_count);
 
-        text_byte_count += byte_count - 1; // without null terminal
+        text_byte_count += byte_count - 1; // without mop_null terminal
     }
 
     LocalFree(arguments);
 
     mop_command_line_info info;
     info.argument_count = argument_count;
-    info.text_byte_count = text_byte_count + 1; // for temporary null terminal returned by WideCharToMultiByte
+    info.text_byte_count = text_byte_count + 1; // for temporary mop_null terminal returned by WideCharToMultiByte
 
     return info;
 }
@@ -793,7 +795,7 @@ mop_get_command_line_arguments_signature
         mop_s32 byte_count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, arguments[i], -1, (mop_cstring) text_buffer.base, text_buffer.count, mop_null, mop_null);
         mop_require(byte_count);
 
-        byte_count -= 1; // remove null terminal
+        byte_count -= 1; // remove mop_null terminal
         mop_assert(byte_count <= text_buffer.count);
 
         argument_buffer[i].base  = text_buffer.base;
@@ -818,12 +820,12 @@ mop_get_working_directory_signature
     platform->working_directory = mop_sl(mop_string) { platform->working_directory_buffer, 0 };
     mop_string *working_directory = &platform->working_directory;
 
-    u32 count = GetCurrentDirectoryA(mop_carray_count(platform->working_directory_buffer), (char *) platform->working_directory_buffer);
+    mop_u32 count = GetCurrentDirectoryA(mop_carray_count(platform->working_directory_buffer), (char *) platform->working_directory_buffer);
     mop_require(count);
-    assert(count <= mop_carray_count(platform->working_directory_buffer));
+    mop_assert(count <= mop_carray_count(platform->working_directory_buffer));
     working_directory->count = count;
 
-    for (u32 i = 0; i < working_directory->count; i++)
+    for (mop_u32 i = 0; i < working_directory->count; i++)
     {
         if (working_directory->base[i] == '\\')
             working_directory->base[i] = '/';
@@ -852,7 +854,7 @@ mop_get_program_directory_signature
 
     {
         mop_usize count = 0; // count without name
-        for (u32 i = 0; i < program_directory->count; i++)
+        for (mop_u32 i = 0; i < program_directory->count; i++)
         {
             if (program_directory->base[i] == '\\')
             {
@@ -1371,9 +1373,9 @@ mop_file_search_advance_signature
         else
         {
             mop_b8 found_slash = mop_false;
-            assert(result->filepath.count >= 2);
+            mop_assert(result->filepath.count >= 2);
 
-            for (u32 i = 0; i < result->filepath.count; i++)
+            for (mop_u32 i = 0; i < result->filepath.count; i++)
             {
                 if (result->filepath.base[result->filepath.count - 2 - i] == '/')
                 {
@@ -1506,16 +1508,16 @@ mop_execute_command_siganture
     mop_require(SetHandleInformation(write_pipe, HANDLE_FLAG_INHERIT, 0));
 
     mop_u8 command_line_buffer[1024];
-    mop_require(snprintf((cstring) command_line_buffer,mop_carray_count(command_line_buffer), "%.*s", mop_fs(command_line)) < mop_carray_count(command_line_buffer));
+    mop_require(snprintf((mop_cstring) command_line_buffer,mop_carray_count(command_line_buffer), "%.*s", mop_fs(command_line)) < mop_carray_count(command_line_buffer));
 
     STARTUPINFOA start_info = {0};
     start_info.cb = sizeof(start_info);
     start_info.hStdError = write_pipe;
     start_info.hStdOutput = write_pipe;
     PROCESS_INFORMATION process_info = {0};
-    mop_b8 ok = CreateProcessA(null, (char *) command_line_buffer, mop_null, mop_null, mop_true, 0, mop_null, mop_null, &start_info, &process_info);
+    mop_b8 ok = CreateProcessA(mop_null, (mop_cstring) command_line_buffer, mop_null, mop_null, mop_true, 0, mop_null, mop_null, &start_info, &process_info);
 
-    string output = output_buffer;
+    mop_string output = output_buffer;
     mop_s32 exit_code = 0;
     if (ok)
     {
@@ -1699,13 +1701,13 @@ struct mop_platform
 
     struct
     {
-        u8 unused;
+        mop_u8 unused;
     } emscripten;
 };
 
 struct mop_window
 {
-    u8 unused;
+    mop_u8 unused;
     //HWND handle;
     //HDC  device_context;
 };
