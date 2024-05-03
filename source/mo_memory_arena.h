@@ -50,7 +50,7 @@ const moma_b8 moma_true  = 1;
 typedef struct
 {
     moma_u8    *base;
-    moma_usize count;
+    moma_usize  count;
 } moma_u8_array;
 
 #else
@@ -109,6 +109,9 @@ moma_destroy_signature;
 #define moma_read_file_signature mop_read_file_result moma_read_file(mop_platform *platform, moma_arena *memory, mop_string path)
 moma_read_file_signature;
 
+#define moma_get_command_line_arguments_signature moma_u32 moma_get_command_line_arguments(moma_string **arguments, mop_platform *platform, moma_arena *memory)
+moma_get_command_line_arguments_signature;
+
 #endif
 
 #ifdef __cplusplus
@@ -142,8 +145,10 @@ moma_allocate_bytes_signature
 
 moma_reallocate_bytes_signature
 {
+    moma_u8 *old_base = *base;
     moma_free(arena, *base);
     *base = moma_allocate_bytes(arena, byte_count, byte_alignment);
+    moma_assert(!old_base || !*base || old_base == *base);
 }
 
 moma_reset_signature
@@ -187,6 +192,21 @@ moma_read_file_signature
     }
 
     return result;
+}
+
+moma_get_command_line_arguments_signature
+{
+    mop_command_line_info command_line_info = mop_get_command_line_info(platform);
+
+    string_array argument_array = { moma_null, command_line_info.argument_count };
+    moma_reallocate_array(memory, &argument_array, string);
+    string argument_text_buffer = { moma_null, command_line_info.text_byte_count };
+    moma_reallocate_array(memory, &argument_text_buffer, u8);
+
+    mop_get_command_line_arguments(argument_text_buffer, (u32) argument_array.count, argument_array.base);
+
+    *arguments = argument_array.base;
+    return argument_array.count;
 }
 
 #endif

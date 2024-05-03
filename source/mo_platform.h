@@ -231,6 +231,13 @@ typedef struct
     mop_u32 text_byte_count;
 } mop_command_line_info;
 
+typedef struct
+{
+    mop_b8     ok;
+    mop_s32    exit_code;
+    mop_string output;
+} mop_execute_command_result;
+
 typedef enum mop_key mop_key;
 
 struct mop_platform;
@@ -294,6 +301,9 @@ mop_write_file_signature;
 #define mop_copy_file_signature mop_b8 mop_copy_file(mop_platform *platform, mop_string to_path, mop_string from_path, mop_b8 override)
 mop_copy_file_signature;
 
+#define mop_create_directory_siganture mop_b8 mop_create_directory(mop_platform *platform, mop_string path)
+mop_create_directory_siganture;
+
 #define mop_file_search_init_signature mop_file_search_iterator mop_file_search_init(mop_platform *platform, mop_string directory_path)
 mop_file_search_init_signature;
 
@@ -340,6 +350,9 @@ mop_atomic_add_s64_signature;
 mop_atomic_sub_s64_signature;
 
 #define mop_atomic_compare_exchange_s32_signature s64 mop_atomic_compare_exchange_s32(mop_platform *platform, s32 *value, s32 expected_value, s32 new_value)
+
+#define mop_execute_command_siganture mop_execute_command_result mop_execute_command(mop_string output_buffer, mop_string command_line)
+mop_execute_command_siganture;
 
 #define mop_load_library_signature mop_b8 mop_load_library(mop_platform *platform, mop_library *library, mop_string name)
 mop_load_library_signature;
@@ -564,6 +577,17 @@ mop_fatal_error_signature
     {
         text.base  += count;
         text.count -= count;
+    }
+
+    u32 error = GetLastError();
+    if (error)
+    {
+        mop_s32 count = snprintf((char *) text.base, text.count, "GetLastError() = %i\n\n", error);
+        if (count >= 0)
+        {
+            text.base  += count;
+            text.count -= count;
+        }
     }
 
     {
@@ -1227,6 +1251,22 @@ mop_copy_file_signature
     return ok;
 }
 
+mop_create_directory_siganture
+{
+    mop_u8 cpath[MAX_PATH];
+    mop_win32_to_cpath(cpath, path);
+
+    mop_b8 ok = CreateDirectory(cpath, mop_null);
+    if (!ok)
+    {
+        if (GetLastError() == ERROR_ALREADY_EXISTS)
+            return true;
+    }
+
+    return ok;
+}
+
+
 mop_normalize_path_signature
 {
     for (mop_usize i = 0; i < path->count; i++)
@@ -1453,6 +1493,59 @@ mop_atomic_add_s64_signature
 mop_atomic_compare_exchange_s32_signature
 {
     return (mop_s32) InterlockedCompareExchange((LONG *) value, (LONG) new_value, (LONG) expected_value);
+}
+
+mop_execute_command_siganture
+{
+    HANDLE read_pipe;
+    HANDLE write_pipe;
+    SECURITY_ATTRIBUTES secutirty_attributes = {0};
+    secutirty_attributes.nLength        = sizeof(SECURITY_ATTRIBUTES);
+    secutirty_attributes.bInheritHandle = mop_true;
+    mop_require(CreatePipe(&read_pipe, &write_pipe, &secutirty_attributes, 0));
+    mop_require(SetHandleInformation(write_pipe, HANDLE_FLAG_INHERIT, 0));
+
+    mop_u8 command_line_buffer[1024];
+    mop_require(snprintf((cstring) command_line_buffer,mop_carray_count(command_line_buffer), "%.*s", mop_fs(command_line)) < mop_carray_count(command_line_buffer));
+
+    STARTUPINFOA start_info = {0};
+    start_info.cb = sizeof(start_info);
+    start_info.hStdError = write_pipe;
+    start_info.hStdOutput = write_pipe;
+    PROCESS_INFORMATION process_info = {0};
+    mop_b8 ok = CreateProcessA(null, command_line_buffer, mop_null, mop_null, mop_true, 0, mop_null, mop_null, &start_info, &process_info);
+
+    string output = output_buffer;
+    mop_s32 exit_code = 0;
+    if (ok)
+    {
+        output.count = 0;
+        while(WaitForSingleObject(process_info.hProcess, 0) != WAIT_OBJECT_0)
+        {
+            mop_u8 buffer[1024];
+
+            mop_u32 read_count;
+            mop_b8 ok = ReadFile(write_pipe, buffer, mop_carray_count(buffer), &read_count, mop_null);
+            if (!ok || read_count == 0)
+                break;
+
+            if (output.count + read_count <= output_buffer.count)
+            {
+                memcpy(output.base + output.count, buffer, read_count);
+                output.count += read_count;
+            }
+        }
+
+        mop_require(GetExitCodeProcess(process_info.hProcess, &exit_code));
+
+        CloseHandle(process_info.hProcess);
+        CloseHandle(process_info.hThread);
+    }
+
+    CloseHandle(read_pipe);
+    CloseHandle(write_pipe);
+
+    return mop_sl(mop_execute_command_result) { ok, exit_code, output };
 }
 
 mop_load_library_signature

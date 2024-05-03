@@ -9,6 +9,10 @@
 extern "C" {
 #endif
 
+#if defined mop_debug
+#define mo_debug
+#endif
+
 #define assert_message(x, message, ...)  mop_assert_message(x, message, __VA_ARGS__)
 #define require_message(x, message, ...) mop_require_message(x, message, __VA_ARGS__)
 

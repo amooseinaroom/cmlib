@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+#include <math.h>
+
 const f32 pi32 = 3.14159265;
 
 // HACK:
@@ -17,11 +19,11 @@ typedef union
 {
     struct
     {
-        moui_f32 x;
-        moui_f32 y;
+        f32 x;
+        f32 y;
     };
 
-    moui_f32 values[2];
+    f32 values[2];
 } moui_vec2;
 
 typedef union
@@ -34,27 +36,27 @@ typedef union
 
     moui_vec2 extends[2];
 
-    moui_f32 values[4];
+    f32 values[4];
 } moui_box2;
 
 typedef struct
 {
-    moui_f32 r;
-    moui_f32 g;
-    moui_f32 b;
-    moui_f32 a;
+    f32 r;
+    f32 g;
+    f32 b;
+    f32 a;
 } moui_rgba;
 
 typedef union
 {
     struct {
-        moui_u8 r;
-        moui_u8 g;
-        moui_u8 b;
-        moui_u8 a;
+        u8 r;
+        u8 g;
+        u8 b;
+        u8 a;
     };
 
-    moui_u32 value;
+    u32 value;
 } moui_rgba8;
 
 #endif
