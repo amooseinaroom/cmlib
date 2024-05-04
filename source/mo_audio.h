@@ -89,18 +89,19 @@ typedef struct
     moa_u16 *base;
     moa_u32  count;
     moa_u32  frequency;
-} moa_stereo_samples;
+    moa_u32  channel_count;
+} moa_samples;
 
 #define moa_init_signature void moa_init(moa_audio *audio)
 moa_init_signature;
 
-#define moa_track_init_signature void moa_track_init(moa_audio *audio, moa_track *track, moa_u32 frequency)
+#define moa_track_init_signature void moa_track_init(moa_audio *audio, moa_track *track, moa_u32 frequency, moa_u32 channel_count)
 moa_track_init_signature;
 
 #define moa_track_set_volume_signature void moa_track_set_volume(moa_audio *audio, moa_track *track, moa_f32 volume_ratio)
 moa_track_set_volume_signature;
 
-#define moa_track_queue_signature void moa_track_queue(moa_audio *audio, moa_track *track, moa_u32 sample_count, moa_u16 *samples, moa_u32 frequency, moa_b8 do_loop)
+#define moa_track_queue_signature void moa_track_queue(moa_audio *audio, moa_track *track, moa_u32 sample_count, moa_u16 *samples, moa_u32 frequency, moa_u32 channel_count, moa_b8 do_loop)
 moa_track_queue_signature;
 
 #define moa_track_play_signature void moa_track_play(moa_audio *audio, moa_track *track)
@@ -112,12 +113,12 @@ moa_track_stop_signature;
 #define moa_track_queue_is_empty_signature moa_b8 moa_track_queue_is_empty(moa_audio *audio, moa_track *track)
 moa_track_queue_is_empty_signature;
 
-#define moa_load_wave_samples_signature moa_stereo_samples moa_load_wave_samples(moa_audio *audio, moa_u8_array buffer, moa_u8_array source)
+#define moa_load_wave_samples_signature moa_samples moa_load_wave_samples(moa_audio *audio, moa_u8_array buffer, moa_u8_array source, moa_b8 force_stereo)
 moa_load_wave_samples_signature;
 
 #if defined(mop_h) && defined(moma_h)
 
-#define moa_load_wave_samples_from_file_signature moa_stereo_samples moa_load_wave_samples_from_file(mop_platform *platform, moa_audio *audio, moma_arena *memory, mop_string path)
+#define moa_load_wave_samples_from_file_signature moa_stereo_samples moa_load_wave_samples_from_file(mop_platform *platform, moa_audio *audio, moma_arena *memory, mop_string path, moa_b8 force_stereo)
 moa_load_wave_samples_from_file_signature;
 
 #endif
@@ -172,7 +173,7 @@ moa_track_init_signature
     moa_assert(!track->source_voice);
 
     track->frequency     = frequency;
-    track->channel_count = 2;
+    track->channel_count = channel_count;
 
     WAVEFORMATEX format = {0};
     format.wFormatTag = WAVE_FORMAT_PCM;
@@ -196,6 +197,7 @@ moa_track_queue_signature
 {
     moa_assert(track->source_voice);
     moa_assert(track->frequency == frequency);
+    moa_assert(track->channel_count == channel_count);
 
     XAUDIO2_BUFFER buffer = {0};
     // buffer.Flags = XAUDIO2_END_OF_STREAM; // supress deboug output warnings on empty buffer?
@@ -343,7 +345,7 @@ moa_u8 * moa_advance(moa_u8_array *iterator, moa_usize count)
 
 moa_load_wave_samples_signature
 {
-    moa_stereo_samples result = {0};
+    moa_samples result = {0};
 
     if (!source.count)
         return result;
@@ -417,18 +419,22 @@ moa_load_wave_samples_signature
             {
                 moa_advance_type(&it, moa_wave_chunk_header);
                 moa_advance(&it, chunk->size);
+
+                // skipp odd padding
+                if (chunk->size & 1)
+                    moa_advance_type(&it, moa_u8);
             };
         }
     }
 
-    if (wave.channel_count == 1)
+    if (wave.channel_count == 1 && force_stereo)
     {
-        moa_assert(wave.sample_count * 2 * sizeof(moa_u16) <= buffer.count);
+        result.base          = (moa_u16 *) buffer.base;
+        result.count         = wave.sample_count * 2;
+        result.frequency     = wave.samples_per_second;
+        result.channel_count = 2;
 
-        result.base      = (moa_u16 *) buffer.base;
-        result.count     = wave.sample_count * 2;
-        result.frequency = wave.samples_per_second;
-
+        moa_assert(wave.sample_count * result.channel_count * sizeof(moa_u16) <= buffer.count);
         moa_u16 *samples = (moa_u16 *) wave.samples.base;
 
         for (moa_u32 i = 0; i < wave.sample_count; i++)
@@ -439,13 +445,13 @@ moa_load_wave_samples_signature
     }
     else
     {
-        moa_assert(wave.channel_count == 2);
         moa_assert(wave.sample_count * sizeof(moa_u16) <= buffer.count);
 
         result.base = (moa_u16 *) buffer.base;
         memcpy(result.base, wave.samples.base, wave.sample_count * sizeof(moa_u16));
-        result.count     = wave.sample_count;
-        result.frequency = wave.samples_per_second;
+        result.count         = wave.sample_count;
+        result.frequency     = wave.samples_per_second;
+        result.channel_count = wave.channel_count;
     }
 
     return result;
@@ -467,7 +473,7 @@ moa_load_wave_samples_from_file_signature
 
     moa_u8_array data = { read_result.data.base, read_result.data.count };
     moa_u8_array buffer = { memory->base + memory->used_count, memory->count - memory->used_count };
-    moa_stereo_samples samples = moa_load_wave_samples(audio, buffer, data);
+    moa_stereo_samples samples = moa_load_wave_samples(audio, buffer, data, force_stereo);
 
     // TODO: align read_result.data.base to u16
     // move allocated samples to the beginning of allocation from memory
