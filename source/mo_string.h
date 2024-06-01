@@ -121,6 +121,9 @@ mos_are_equal_signature;
 #define mos_substring_signature mos_string mos_substring(mos_string text, mos_usize offset, mos_usize count)
 mos_substring_signature;
 
+#define mos_substring_between_signature mos_string mos_substring_between(mos_string start, mos_string end)
+mos_substring_between_signature;
+
 #define mos_remaining_substring_signature mos_string mos_remaining_substring(mos_string text, mos_usize offset)
 mos_remaining_substring_signature;
 
@@ -244,6 +247,11 @@ mos_substring_signature
 mos_remaining_substring_signature
 {
     return mos_substring(text, offset, text.count - offset);
+}
+
+mos_substring_between_signature
+{
+    return mos_sl(string) { start.base, (mos_usize) (end.base - start.base) };
 }
 
 mos_substring_until_end_signature

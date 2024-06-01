@@ -369,6 +369,9 @@ typedef mop_hot_update_type((*mop_hot_update_function));
 
 #define mop_hot_reload_signature mop_b8 mop_hot_reload(mop_platform *platform, mop_hot_reload_state *state, mop_string name)
 
+#define mop_debug_break_signature void mop_debug_break()
+mop_debug_break_signature;
+
 #define mop_key_state_was_pressed_signature mop_b8 mop_key_state_was_pressed(mop_key_state state)
 mop_key_state_was_pressed_signature;
 
@@ -1111,8 +1114,11 @@ void mop_win32_to_cpath(mop_u8 cpath[MAX_PATH], mop_string path)
 
     for (mop_u32 i = 0; i < path.count; i++)
     {
-        mop_assert(path.base[i] != '\\'); // make paths consistent
-        cpath[i] = path.base[i];
+         // make paths consistent
+        if (path.base[i] == '\\')
+            cpath[i] = '/';
+        else
+            cpath[i] = path.base[i];
     }
 
     if (path.count < MAX_PATH)
@@ -1643,6 +1649,11 @@ mop_hot_reload_signature
     state->hot_update = (mop_hot_update_function) mop_load_symbol(platform, &state->library, mop_hot_update_name);
 
     return mop_true;
+}
+
+mop_debug_break_signature
+{
+    __debugbreak();
 }
 
 #elif __EMSCRIPTEN__

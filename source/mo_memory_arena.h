@@ -188,7 +188,7 @@ moma_read_file_signature
     if (result.ok)
     {
         u8 *base = moma_allocate_bytes(memory, result.data.count, 1);
-        assert(base == data.base);
+        assert(!base || base == data.base);
     }
 
     return result;
