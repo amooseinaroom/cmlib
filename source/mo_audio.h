@@ -118,7 +118,7 @@ moa_load_wave_samples_signature;
 
 #if defined(mop_h) && defined(moma_h)
 
-#define moa_load_wave_samples_from_file_signature moa_stereo_samples moa_load_wave_samples_from_file(mop_platform *platform, moa_audio *audio, moma_arena *memory, mop_string path, moa_b8 force_stereo)
+#define moa_load_wave_samples_from_file_signature moa_samples moa_load_wave_samples_from_file(mop_platform *platform, moa_audio *audio, moma_arena *memory, mop_string path, moa_b8 force_stereo)
 moa_load_wave_samples_from_file_signature;
 
 #endif
@@ -473,7 +473,7 @@ moa_load_wave_samples_from_file_signature
 
     moa_u8_array data = { read_result.data.base, read_result.data.count };
     moa_u8_array buffer = { memory->base + memory->used_count, memory->count - memory->used_count };
-    moa_stereo_samples samples = moa_load_wave_samples(audio, buffer, data, force_stereo);
+    moa_samples samples = moa_load_wave_samples(audio, buffer, data, force_stereo);
 
     // TODO: align read_result.data.base to u16
     // move allocated samples to the beginning of allocation from memory
