@@ -83,6 +83,7 @@ typedef struct
 
 #define moma_allocate_item(arena, type)         ((type *) moma_allocate_bytes(arena, sizeof(type), moma_aling_of(type)))
 #define moma_allocate_array(arena, type, count) ((type *) moma_allocate_bytes(arena, sizeof(type) * (count), moma_aling_of(type)))
+#define moma_reallocate_items(arena, type, base, count) moma_reallocate_bytes(arena, (moma_u8 **) base, sizeof(type) * (count), moma_aling_of(type))
 #define moma_reallocate_array(arena, array, type) moma_reallocate_bytes(arena, (moma_u8 **) &(array)->base, sizeof(type) * ((array)->count), moma_aling_of(type))
 #define moma_free(arena, item_or_array_base)              moma_reset(arena, (moma_u8 *) (item_or_array_base))
 

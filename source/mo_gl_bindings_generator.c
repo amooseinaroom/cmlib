@@ -520,13 +520,13 @@ s32 main(s32 argument_count, cstring arguments[])
     mop_init(&platform);
 
     struct {
-        cstring path;
+        string path;
         //bool exclude_wgl_constants;
         b8 dont_define_functions;
     } files[] =
     {
-        { "C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/um/gl/GL.h", },
-        { "source/gl/glext.h", true },
+        { s("C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/um/gl/GL.h"), },
+        { s("source/gl/glext.h"), true },
     };
 
     u8_array read_buffer = { _read_file_buffer, carray_count(_read_file_buffer) };
@@ -646,7 +646,7 @@ s32 main(s32 argument_count, cstring arguments[])
         mop_read_file_result read_file_result = mop_read_file(&platform, read_buffer, files[i].path);
         if (!read_file_result.ok)
         {
-            printf("couldn't open file %s\n", files[i].path);
+            printf("couldn't open file %.*s\n", fs(files[i].path));
             return 0;
         }
 
@@ -671,7 +671,7 @@ s32 main(s32 argument_count, cstring arguments[])
         "\n"
         "#endif\n");
 
-    mop_write_file(&platform, "source/mo_gl_bindings.h", mos_buffer_to_string(buffer));
+    mop_write_file(&platform, s("source/mo_gl_bindings.h"), mos_buffer_to_string(buffer));
 
     u32 gl_function_count = dll_functions.used_count;
 
@@ -697,6 +697,7 @@ s32 main(s32 argument_count, cstring arguments[])
             "typedef %.*s HPVIDEODEV;\n"
             "\n"
             "#if !defined(_WIN32) && !defined(WIN32)\n"
+            "typedef %.*s HANDLE;\n"
             "typedef %.*s HGLRC;\n"
             "\n"
             "%.*s wglGetProcAddress(%.*sname);\n"
@@ -717,7 +718,7 @@ s32 main(s32 argument_count, cstring arguments[])
             fs(basic_type_names[basic_type_s32]));
 
         {
-            mop_read_file_result read_file_result = mop_read_file(&platform, read_buffer, "source/gl/wglext.h");
+            mop_read_file_result read_file_result = mop_read_file(&platform, read_buffer, s("source/gl/wglext.h"));
             if (!read_file_result.ok)
             {
                 printf("couldn't open file %s\n", "gl/wglext.h");
@@ -757,7 +758,7 @@ s32 main(s32 argument_count, cstring arguments[])
             "\n"
             "#endif");
 
-        mop_write_file(&platform, "source/mo_gl_win32_bindings.h", mos_buffer_to_string(buffer));
+        mop_write_file(&platform, s("source/mo_gl_win32_bindings.h"), mos_buffer_to_string(buffer));
     }
 
     return 0;

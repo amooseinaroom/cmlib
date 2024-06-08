@@ -14,12 +14,13 @@ typedef void * HVIDEOINPUTDEVICENV;
 typedef void * HPVIDEODEV;
 
 #if !defined(_WIN32) && !defined(WIN32)
+typedef void * HANDLE;
 typedef void * HGLRC;
 
-void * wglGetProcAddress(char *name);
+char * wglGetProcAddress(signed intname);
 HGLRC wglCreateContext(HDC device_context);
 signed int wglDeleteContext(HGLRC gl_context);
-signed int wglMakeCurrent(HDC device_context, HGLRC gl_context);
+signed char wglMakeCurrent(HDC device_context, HGLRC gl_context);
 #endif#define WGL_WGLEXT_VERSION 20230705
 #define WGL_ARB_buffer_region 1
 #define WGL_FRONT_COLOR_BUFFER_BIT_ARB 0x00000001

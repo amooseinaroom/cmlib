@@ -130,7 +130,7 @@ copy_signature;
     } name \
 
 #define mo_string_list(name, list_macro) \
-    const string name[] = \
+    string name[] = \
     { \
         list_macro(mo_string_item) \
     } \

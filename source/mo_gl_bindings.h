@@ -57,7 +57,7 @@ typedef void * GLsync;
 typedef void _cl_context;
 typedef void _cl_event;
 
-// file: C:/Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/um/gl/GL.h
+// file: <�e�
 
 #define GL_VERSION_1_1 1
 #define GL_ACCUM 0x0100
@@ -642,8 +642,8 @@ typedef void _cl_event;
 #define GL_COLOR_INDEX16_EXT 0x80E7
 #define GL_MAX_ELEMENTS_VERTICES_WIN 0x80E8
 #define GL_MAX_ELEMENTS_INDICES_WIN 0x80E9
-#define GL_PHONG_WIN 0x80EA 
-#define GL_PHONG_HINT_WIN 0x80EB 
+#define GL_PHONG_WIN 0x80EA
+#define GL_PHONG_HINT_WIN 0x80EB
 #define GL_FOG_SPECULAR_TEXTURE_WIN 0x80EC
 #define GL_LOGIC_OP GL_INDEX_LOGIC_OP
 #define GL_TEXTURE_COMPONENTS GL_TEXTURE_INTERNAL_FORMAT
@@ -1320,7 +1320,7 @@ void glVertexPointer(GLint size, GLenum type, GLsizei stride, GLvoid *pointer);
 
 void glViewport(GLint x, GLint y, GLsizei width, GLsizei height);
 
-// file: source/gl/glext.h
+// file: �;�e�
 
 #define GL_GLEXT_VERSION 20230705
 #define GL_VERSION_1_2 1

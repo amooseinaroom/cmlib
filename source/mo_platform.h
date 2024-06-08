@@ -378,14 +378,29 @@ mop_key_state_was_pressed_signature;
 #define mop_key_state_was_released_signature mop_b8 mop_key_state_was_released(mop_key_state state)
 mop_key_state_was_released_signature;
 
-#define mop_key_is_active_signature mop_b8 mop_key_is_active(mop_platform *platform, mop_u32 key)
-mop_key_is_active_signature;
+#define mop_key_state_was_active_signature mop_b8 mop_key_state_was_active(mop_key_state state)
+mop_key_state_was_active_signature;
+
+#define mop_key_was_active_signature mop_b8 mop_key_was_active(mop_platform *platform, mop_u32 key)
+mop_key_was_active_signature;
 
 #define mop_key_was_pressed_signature mop_b8 mop_key_was_pressed(mop_platform *platform, mop_u32 key)
 mop_key_was_pressed_signature;
 
 #define mop_key_was_released_signature mop_b8 mop_key_was_released(mop_platform *platform, mop_u32 key)
 mop_key_was_released_signature;
+
+#define mop_key_state_event_update_signature void mop_key_state_event_update(mop_key_state *state, mop_b8 is_active)
+mop_key_state_event_update_signature;
+
+#define mop_key_state_poll_update_signature void mop_key_state_poll_update(mop_key_state *state, mop_b8 is_active)
+mop_key_state_poll_update_signature;
+
+#define mop_key_event_update_signature void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_event_update_signature;
+
+#define mop_key_poll_update_signature void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
+mop_key_poll_update_signature;
 
 const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
 
@@ -404,11 +419,6 @@ const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
 
 #endif
 
-#endif
-
-#if defined mop_implementation
-#undef mop_implementation
-
 const mop_u32 mop_month_day_count[12] =
 {
     31, // january
@@ -425,11 +435,10 @@ const mop_u32 mop_month_day_count[12] =
     31, // december
 };
 
-#define mop_key_event_update_signature void mop_key_event_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
-mop_key_event_update_signature;
+#endif
 
-#define mop_key_poll_update_signature void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
-mop_key_poll_update_signature;
+#if defined mop_implementation
+#undef mop_implementation
 
 #if defined(_WIN32) || defined(WIN32)
 
@@ -1181,7 +1190,7 @@ mop_read_file_signature
     if (handle == INVALID_HANDLE_VALUE)
     {
         mop_s32 error = GetLastError();
-        mop_require((error == ERROR_FILE_NOT_FOUND) || (error == ERROR_SHARING_VIOLATION));
+        mop_require((error == ERROR_FILE_NOT_FOUND) || (error == ERROR_PATH_NOT_FOUND) || (error == ERROR_SHARING_VIOLATION));
 
         return mop_sl(mop_read_file_result) {0};
     }
@@ -1729,26 +1738,36 @@ struct mop_window
 
 #endif
 
+mop_key_state_event_update_signature
+{
+    if (state->half_transition_count == 63)
+        state->half_transition_overflow = mop_true;
+
+    state->half_transition_count += 1;
+    state->is_active = is_active;
+}
+
+mop_key_state_poll_update_signature
+{
+    state->half_transition_count    = 0;
+    state->half_transition_overflow = mop_false;
+
+    if (state->is_active != is_active)
+        mop_key_state_event_update(state, is_active);
+}
+
 mop_key_event_update_signature
 {
     mop_assert(key < mop_carray_count(platform->keys));
-
-    // mop_assert(platform->keys[key].is_active != is_active);
-
-    if (platform->keys[key].half_transition_count == 63)
-        platform->keys[key].half_transition_overflow = mop_true;
-
-    platform->keys[key].half_transition_count += 1;
-    platform->keys[key].is_active = is_active;
+    mop_key_state_event_update(&platform->keys[key], is_active);
 }
 
 mop_key_poll_update_signature
 {
     mop_assert(key < mop_carray_count(platform->keys));
-
-    if (platform->keys[key].is_active != is_active)
-        mop_key_event_update(platform, key, is_active);
+    mop_key_state_poll_update(&platform->keys[key], is_active);
 }
+
 
 mop_key_state_was_pressed_signature
 {
@@ -1760,11 +1779,16 @@ mop_key_state_was_released_signature
     return state.half_transition_overflow || (state.half_transition_count >= 1 + state.is_active);
 }
 
-mop_key_is_active_signature
+mop_key_state_was_active_signature
+{
+    return state.is_active || mop_key_state_was_pressed(state);
+}
+
+mop_key_was_active_signature
 {
     mop_assert(key < mop_carray_count(platform->keys));
     mop_key_state state = platform->keys[key];
-    return state.is_active;
+    return mop_key_state_was_active(state);
 }
 
 mop_key_was_pressed_signature

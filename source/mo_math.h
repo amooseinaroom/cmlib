@@ -73,6 +73,238 @@ typedef union
 
 const vec3 vec3_zero = {0};
 const vec3 vec3_one = { 1, 1, 1 };
+const vec3 vec3_x   = { 1, 0, 0 };
+const vec3 vec3_y   = { 0, 1, 0 };
+const vec3 vec3_z   = { 0, 0, 1 };
+
+vec3 vec3_adds(vec3 a, f32 b)
+{
+    vec3 result =
+    {
+        a.x + b,
+        a.y + b,
+        a.z + b,
+    };
+    return result;
+}
+
+vec3 vec3_add(vec3 a, vec3 b)
+{
+    vec3 result =
+    {
+        a.x + b.x,
+        a.y + b.y,
+        a.z + b.z,
+    };
+    return result;
+}
+
+vec3 vec3_negate(vec3 a)
+{
+    vec3 result =
+    {
+        -a.x,
+        -a.y,
+        -a.z,
+    };
+    return result;
+}
+
+vec3 vec3_subs(vec3 a, f32 b)
+{
+    vec3 result =
+    {
+        a.x - b,
+        a.y - b,
+        a.z - b,
+    };
+    return result;
+}
+
+vec3 vec3_subs_rev(f32 a, vec3 b)
+{
+    vec3 result =
+    {
+        a - b.x,
+        a - b.y,
+        a - b.z,
+    };
+    return result;
+}
+
+vec3 vec3_sub(vec3 a, vec3 b)
+{
+    vec3 result =
+    {
+        a.x - b.x,
+        a.y - b.y,
+        a.z - b.z,
+    };
+    return result;
+}
+
+vec3 vec3_muls(vec3 a, f32 b)
+{
+    vec3 result =
+    {
+        a.x * b,
+        a.y * b,
+        a.z * b,
+    };
+    return result;
+}
+
+vec3 vec3_mul(vec3 a, vec3 b)
+{
+    vec3 result =
+    {
+        a.x * b.x,
+        a.y * b.y,
+        a.z * b.z,
+    };
+    return result;
+}
+
+vec3 vec3_divs(vec3 a, f32 b)
+{
+    f32 inverse_b = 1.0f / b;
+    vec3 result =
+    {
+        a.x * inverse_b,
+        a.y * inverse_b,
+        a.z * inverse_b,
+    };
+    return result;
+}
+
+vec3 vec3_div(vec3 a, vec3 b)
+{
+    vec3 result =
+    {
+        a.x / b.x,
+        a.y / b.y,
+        a.z / b.z,
+    };
+    return result;
+}
+
+f32 vec3_dot(vec3 a, vec3 b)
+{
+    f32 result = a.x * b.x + a.y * b.y + a.z * b.z;
+    return result;
+}
+
+// using right hand rule
+vec3 vec3_cross(vec3 right_thumb, vec3 right_index)
+{
+    vec3 right_middle =
+    {
+        (right_thumb.values[1] * right_index.values[2]) - (right_thumb.values[2] * right_index.values[1]),
+        (right_thumb.values[2] * right_index.values[0]) - (right_thumb.values[0] * right_index.values[2]),
+        (right_thumb.values[0] * right_index.values[1]) - (right_thumb.values[1] * right_index.values[0]),
+    };
+
+    return right_middle;
+}
+
+f32 vec3_length_squared(vec3 vector)
+{
+    f32 result = vec3_dot(vector, vector);
+    return result;
+}
+
+f32 vec3_length(vec3 vector)
+{
+    f32 result = sqrtf(vec3_length_squared(vector));
+    return result;
+}
+
+vec3 vec3_normalize(vec3 vector)
+{
+    vec3 result = vec3_divs(vector, vec3_length(vector));
+    return result;
+}
+
+vec3 vec3_normalize_or_zero(vec3 vector)
+{
+    f32 length_squared = vec3_length_squared(vector);
+    if (length_squared > 0)
+        return vec3_divs(vector, sqrtf(length_squared));
+    else
+        return vec3_zero;
+}
+
+vec3 vec3_min(vec3 a, vec3 b)
+{
+    return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z) };
+}
+
+vec3 vec3_max(vec3 a, vec3 b)
+{
+    return { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z) };
+}
+
+vec3 vec3_lerp(vec3 from, vec3 to, vec3 ratio)
+{
+    return vec3_add(vec3_mul(from, vec3_subs_rev(1, ratio)), vec3_mul(to, ratio));
+}
+
+vec3 vec3_lerps(vec3 from, vec3 to, f32 ratio)
+{
+    return vec3_add(vec3_muls(from, 1.0f - ratio), vec3_muls(to, ratio));
+}
+
+vec3 reflect(vec3 normal, vec3 in_direction)
+{
+    vec3 out_direction = vec3_sub(in_direction, vec3_muls(normal, vec3_dot(normal, in_direction) * 2));
+    return out_direction;
+}
+
+typedef union
+{
+    struct
+    {
+        f32 x, y, z, w;
+    };
+
+    struct
+    {
+        f32 r, g, b, a;
+    };
+
+    vec3 xyz;
+    vec3 rgb;
+
+    f32 values[4];
+} vec4;
+
+const vec4 vec4_zero = {0};
+const vec4 vec4_one  = { 1, 1, 1, 1 };
+
+vec4 vec4_add(vec4 a, vec4 b)
+{
+    vec4 result =
+    {
+        a.x + b.x,
+        a.y + b.y,
+        a.z + b.z,
+        a.w + b.w,
+    };
+    return result;
+}
+
+
+vec4 vec4_muls(vec4 a, f32 b)
+{
+    vec4 result =
+    {
+        a.x * b,
+        a.y * b,
+        a.z * b,
+        a.w * b,
+    };
+    return result;
+}
 
 typedef struct
 {
@@ -129,7 +361,7 @@ f32 vec2_dot(vec2 a, vec2 b)
     return a.x * b.x + a.y * b.y;
 }
 
-vec2 vec2_scale(vec2 vector, f32 scale)
+vec2 vec2_muls(vec2 vector, f32 scale)
 {
     return sl(vec2) { vector.x * scale, vector.y * scale };
 }
@@ -151,7 +383,7 @@ vec2 vec2_normalize(vec2 vector)
     f32 length_squared = vec2_length_squared(vector);
     f32 length = sqrtf(length_squared);
 
-    return vec2_scale(vector, 1.0f / length);
+    return vec2_muls(vector, 1.0f / length);
 }
 
 vec2 vec2_normalize_safe(vec2 vector, vec2 fallback)
@@ -161,7 +393,7 @@ vec2 vec2_normalize_safe(vec2 vector, vec2 fallback)
         return fallback;
 
     f32 length = sqrtf(length_squared);
-    return vec2_scale(vector, 1.0f / length);
+    return vec2_muls(vector, 1.0f / length);
 }
 
 vec2 vec2_floor(vec2 vector)
@@ -174,94 +406,9 @@ vec2 vec2_ceil(vec2 vector)
     return sl(vec2) { ceilf(vector.x), ceilf(vector.y) };
 }
 
-vec2 vec2_lerp(vec2 a, vec2 b, f32 blend)
+vec2 vec2_lerps(vec2 a, vec2 b, f32 blend)
 {
-    return vec2_add(vec2_scale(a, 1 - blend), vec2_scale(b, blend));
-}
-
-f32 vec3_dot(vec3 a, vec3 b)
-{
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-vec3 vec3_scale(vec3 vector, f32 scale)
-{
-    return sl(vec3) { vector.x * scale, vector.y * scale, vector.z * scale };
-}
-
-vec3 vec3_add(vec3 a, vec3 b)
-{
-    return sl(vec3)
-    {
-        a.x + b.x,
-        a.y + b.y,
-        a.z + b.z,
-    };
-}
-
-vec3 vec3_sub(vec3 a, vec3 b)
-{
-    return sl(vec3)
-    {
-        a.x - b.x,
-        a.y - b.y,
-        a.z - b.z,
-    };
-}
-
-vec3 vec3_mul(vec3 a, vec3 b)
-{
-    return sl(vec3)
-    {
-        a.x * b.x,
-        a.y * b.y,
-        a.z * b.z,
-    };
-}
-
-f32 vec3_length_squared(vec3 vector)
-{
-    f32 length_squared = vec3_dot(vector, vector);
-    return length_squared;
-}
-
-f32 vec3_length(vec3 vector)
-{
-    f32 length_squared = vec3_length_squared(vector);
-    f32 length = sqrtf(length_squared);
-    return length;
-}
-vec3 vec3_normalize(vec3 vector)
-{
-    f32 length = vec3_length(vector);
-    return vec3_scale(vector, 1.0f / length);
-}
-
-vec3 vec3_normalize_safe(vec3 vector, vec3 fallback)
-{
-    f32 length_squared = vec3_length_squared(vector);
-    if (length_squared == 0)
-        return fallback;
-
-    f32 length = sqrtf(length_squared);
-    return vec3_scale(vector, 1.0f / length);
-}
-
-vec3 vec3_cross(vec3 right_hand_thumb, vec3 right_hand_index)
-{
-    vec3 right_hand_middle =
-    {
-        right_hand_thumb.z * right_hand_index.y - right_hand_thumb.y * right_hand_index.z,
-        right_hand_thumb.x * right_hand_index.z - right_hand_thumb.z * right_hand_index.x,
-        right_hand_thumb.y * right_hand_index.x - right_hand_thumb.x * right_hand_index.y
-    };
-
-    return right_hand_middle;
-}
-
-vec3 vec3_reflect(vec3 normal, vec3 direction)
-{
-    return vec3_sub(direction, vec3_scale(normal, 2 * vec3_dot(normal, direction)));
+    return vec2_add(vec2_muls(a, 1 - blend), vec2_muls(b, blend));
 }
 
 vec3 vec3_refract(vec3 normal, vec3 direction, f32 eta)
@@ -273,7 +420,7 @@ vec3 vec3_refract(vec3 normal, vec3 direction, f32 eta)
     else
     {
         eta = 1.0f / eta;
-        normal = vec3_scale(normal, -1);
+        normal = vec3_muls(normal, -1);
     }
 
     f32 k = 1 - eta * eta * (1 - cos_theta * cos_theta);
@@ -281,7 +428,7 @@ vec3 vec3_refract(vec3 normal, vec3 direction, f32 eta)
     if (k < 0)
         return sl(vec3) {0};
 
-    return vec3_add(vec3_scale(direction, eta), vec3_scale(normal, eta * cos_theta - sqrtf(k)));
+    return vec3_add(vec3_muls(direction, eta), vec3_muls(normal, eta * cos_theta - sqrtf(k)));
 
 #else
     f32 N_dot_I = vec3_dot(normal, direction);
@@ -292,11 +439,6 @@ vec3 vec3_refract(vec3 normal, vec3 direction, f32 eta)
 
     return vec3_sub(vec3_scale(direction, eta), vec3_scale(normal, eta * N_dot_I + sqrtf(k)));
 #endif
-}
-
-vec3 vec3_lerp(vec3 a, vec3 b, f32 blend)
-{
-    return vec3_add(vec3_scale(a, 1 - blend), vec3_scale(b, blend));
 }
 
 typedef union
@@ -326,7 +468,7 @@ vec3 mat4x3_transform(mat4x3 matrix, vec3 vector, f32 w)
 
 vec3 ray_evaluate(ray3 ray, f32 distance)
 {
-    return vec3_add(ray.origin, vec3_scale(ray.direction, distance));
+    return vec3_add(ray.origin, vec3_muls(ray.direction, distance));
 }
 
 const f32 f32_epsilon = 0.0001f;
@@ -820,6 +962,332 @@ box2 box2_move(box2 box, vec2 offset)
     box.max = vec2_add(box.max, offset);
     return box;
 }
+
+typedef union
+{
+    struct
+    {
+        f32 w, x, y, z;
+    };
+
+    f32 values[4];
+} quat;
+
+const quat quat_identity = { 1, 0, 0, 0 };
+
+quat quat_axis_cos_sin(vec3 normalized_rotation_axis, f32 cos_value, f32 sin_value)
+{
+    quat result =
+    {
+        cos_value,
+        normalized_rotation_axis.x * sin_value,
+        normalized_rotation_axis.y * sin_value,
+        normalized_rotation_axis.z * sin_value,
+    };
+
+    return result;
+}
+
+quat quat_axis_angle(vec3 normalized_rotation_axis, f32 angle_in_radians)
+{
+    angle_in_radians = angle_in_radians * 0.5f;
+    f32 cos_value = cosf(angle_in_radians);
+    f32 sin_value = sinf(angle_in_radians);
+
+    return quat_axis_cos_sin(normalized_rotation_axis, cos_value, sin_value);
+}
+
+quat quat_between_normals(vec3 from_normal, vec3 to_normal)
+{
+    vec3 normalized_rotation_axis = vec3_cross(from_normal, to_normal);
+    f32 angle = acosf(vec3_dot(from_normal, to_normal));
+    //var cos_value =  * 0.5;
+    //var sin_value = sqrt(1 - (cos_value * cos_value));
+    //return quat_axis_cos_sin(normalized_rotation_axis, cos_value, sin_value);
+
+    return quat_axis_angle(normalized_rotation_axis, angle);
+}
+
+quat multiply(quat second, quat first)
+{
+    quat result =
+    {
+        (first.w * second.w) - (first.x * second.x) - (first.y * second.y) - (first.z * second.z),
+        (first.w * second.x) + (first.x * second.w) + (first.y * second.z) - (first.z * second.y),
+        (first.w * second.y) - (first.x * second.z) + (first.y * second.w) + (first.z * second.x),
+        (first.w * second.z) + (first.x * second.y) - (first.y * second.x) + (first.z * second.w)
+    };
+
+    return result;
+}
+
+quat inverse(quat value)
+{
+    f32 inverse_length_squared = -1.0f / (value.w * value.w + value.x * value.x + value.y * value.y + value.z * value.z);
+
+    quat result =
+    {
+        value.w * inverse_length_squared,
+        value.x * inverse_length_squared,
+        value.y * inverse_length_squared,
+        value.z * inverse_length_squared,
+    };
+
+    return result;
+}
+
+typedef union
+{
+    struct
+    {
+        vec3 right;       f32 right_w;
+        vec3 up;          f32 up_w;
+        vec3 forward;     f32 forward_w;
+        vec3 translation; f32 translation_w;
+    };
+
+    vec4 columns[4];
+    f32  values[16];
+} mat4;
+
+const mat4 mat4_identity = {
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+};
+
+vec4 mat4_mulv(mat4 transform, vec4 vector)
+{
+    vec4 result =
+    {
+        vec4_add(vec4_muls(transform.columns[0], vector.x),
+        vec4_add(vec4_muls(transform.columns[1], vector.y),
+        vec4_add(vec4_muls(transform.columns[2], vector.z),
+        vec4_muls(transform.columns[3], vector.w))))
+    };
+    return result;
+}
+
+mat4 mat4_mul(mat4 second, mat4 first)
+{
+    mat4 result;
+    result.columns[0] = mat4_mulv(second, first.columns[0]);
+    result.columns[1] = mat4_mulv(second, first.columns[1]);
+    result.columns[2] = mat4_mulv(second, first.columns[2]);
+    result.columns[3] = mat4_mulv(second, first.columns[3]);
+
+    return result;
+}
+
+vec3 mat4_transform(mat4 transform, vec3 position)
+{
+    vec4 vector;
+    vector.xyz = position;
+    vector.w   = 1;
+    vector = mat4_mulv(transform, vector);
+    // assuming vector.w == 1
+    return vector.xyz;
+}
+
+vec3 mat4_project(mat4 projection, vec3 position)
+{
+    vec4 vector;
+    vector.xyz = position;
+    vector.w   = 1;
+    vector = mat4_mulv(projection, vector);
+    return vec3_divs(vector.xyz, vector.w);
+}
+
+mat4 mat4_scaled_transform(quat rotation, vec3 scale, vec3 translation)
+{
+    f32 xx = rotation.x * rotation.x;
+    f32 xy = rotation.x * rotation.y;
+    f32 xz = rotation.x * rotation.z;
+
+    f32 yy = rotation.y * rotation.y;
+    f32 yz = rotation.y * rotation.z;
+
+    f32 zz = rotation.z * rotation.z;
+
+    f32 wx = rotation.w * rotation.x;
+    f32 wy = rotation.w * rotation.y;
+    f32 wz = rotation.w * rotation.z;
+
+    mat4 result;
+    result.columns[0].values[0] = (1 - (2 * (yy + zz)))   * scale.x;
+    result.columns[1].values[0] =       2 * (xy - wz) 	  * scale.y;
+    result.columns[2].values[0] =       2 * (xz + wy)	  * scale.z;
+
+    result.columns[0].values[1] =       2 * (xy + wz)	  * scale.x;
+    result.columns[1].values[1] = (1 - (2 * (xx + zz)))   * scale.y;
+    result.columns[2].values[1] =       2 * (yz - wx)	  * scale.z;
+
+    result.columns[0].values[2] =       2 * (xz - wy)	  * scale.x;
+    result.columns[1].values[2] =       2 * (yz + wx)	  * scale.y;
+    result.columns[2].values[2] = (1 - (2 * (xx + yy))	) * scale.z;
+
+    result.columns[0].values[3] = 0;
+    result.columns[1].values[3] = 0;
+    result.columns[2].values[3] = 0;
+
+    result.columns[3].xyz       = translation;
+    result.columns[3].values[3] = 1;
+
+    return result;
+}
+
+mat4 mat4_unscaled_transform(quat rotation, vec3 translation)
+{
+    return mat4_scaled_transform(rotation, vec3_one, translation);
+}
+
+mat4 mat4_camera_to_world_look_at(vec3 center, vec3 target, vec3 relative_up)
+{
+    // camera forward points in opposite to the camera view direction
+    vec3 forward = vec3_normalize(vec3_sub(center, target)); // is flipped
+    vec3 right   = vec3_normalize(vec3_cross(relative_up, forward));
+    vec3 up      = vec3_cross(forward, right);
+
+    mat4 result = {0};
+    result.right         = right;
+    result.up            = up;
+    result.forward       = forward;
+    result.translation   = center;
+    result.translation_w = 1;
+    return result;
+}
+
+mat4 mat4_inverse_transform(mat4 transform)
+{
+    vec3 inverse_scale =
+    {
+        1.0f / vec3_length(transform.columns[0].xyz),
+        1.0f / vec3_length(transform.columns[1].xyz),
+        1.0f / vec3_length(transform.columns[2].xyz),
+    };
+
+    mat4 result = {0};
+    for (u32 x = 0; x < 3; x++)
+    {
+        for (u32 y = 0; y < 3; y++)
+        {
+            result.columns[x].values[y] = transform.columns[y].values[x] * inverse_scale.values[y];
+        }
+    }
+
+    result.translation_w = 1;
+    result.translation   = mat4_transform(result, vec3_negate(transform.translation));
+
+    return result;
+}
+
+mat4 mat4_inverse_unscaled_transform(mat4 transform)
+{
+    mat4 result = {0};
+    for (u32 x = 0; x < 3; x++)
+    {
+        for (u32 y = 0; y < 3; y++)
+        {
+            result.columns[x].values[y] = transform.columns[y].values[x];
+        }
+    }
+
+    result.translation_w = 1;
+    result.translation   = mat4_transform(result, vec3_negate(transform.translation));
+
+    return result;
+}
+
+// projection matrix
+// a | 0 | 0 | 0
+// 0 | b | 0 | 0
+// 0 | 0 | c | d
+// 0 | 0 | e | 0
+mat4 mat4_perspective_projection_ex(f32 a, f32 b, f32 c, f32 d, f32 e)
+{
+    mat4 result = {0};
+    result.columns[0].values[0] = a;
+    result.columns[1].values[1] = b;
+    result.columns[2].values[2] = c;
+    result.columns[3].values[2] = d;
+    result.columns[2].values[3] = e;
+
+    return result;
+}
+
+const f32 mat4_default_near_plane = 0.01f;
+const f32 mat4_default_far_plane  = 100.0f;
+
+mat4 mat4_perspective_projection(f32 width, f32 height, f32 near_plane, f32 far_plane)
+{
+    f32 a = 2 * near_plane / width;
+    f32 b = 2 * near_plane / height;
+    f32 c = -    (far_plane + near_plane) / (far_plane - near_plane);
+    f32 d = - 2 * far_plane * near_plane  / (far_plane - near_plane);
+    f32 e = -1;
+
+    return mat4_perspective_projection_ex(a, b, c, d, e);
+}
+
+mat4 mat4_perspective_projection_fov(f32 fov_y, f32 width_over_height, f32 near_plane, f32 far_plane)
+{
+    f32 height = 2 * near_plane * tanf(fov_y * 0.5f);
+    f32 width = width_over_height * height;
+    return mat4_perspective_projection(width, height, near_plane, far_plane);
+}
+
+// inverse projection matrix
+// 1 / a |     0 |     0 |            0
+// 0     | 1 / b |     0 |            0
+// 0     |     0 |     0 |        1 / e
+// 0     |     0 | 1 / d | -c / (d * e)
+mat4 mat4_inverse_perspective_projection_ex(f32 a, f32 b, f32 c, f32 d, f32 e)
+{
+    mat4 result = {0};
+    result.columns[0].values[0] = 1 / a;
+    result.columns[1].values[1] = 1 / b;
+    result.columns[2].values[3] = 1 / d;
+    result.columns[3].values[2] = 1 / e;
+    result.columns[3].values[3] = -c / (d * e);
+
+    return result;
+}
+
+mat4 mat4_inverse_perspective_projection(mat4 projection)
+{
+    return mat4_inverse_perspective_projection_ex(
+        projection.columns[0].values[0],
+        projection.columns[1].values[1],
+        projection.columns[2].values[2],
+        projection.columns[3].values[2],
+        projection.columns[2].values[3]);
+}
+
+mat4 mat4_orthographic_projection(f32 width, f32 height, f32 near_plane, f32 far_plane)
+{
+    mat4 result = {0};
+    result.columns[0].values[0] = 2.0f / width;
+    result.columns[1].values[1] = 2.0f / height;
+    result.columns[2].values[2] = 2.0f / (near_plane - far_plane);
+    result.columns[3].values[2] = (near_plane + far_plane) / (near_plane - far_plane);
+    result.columns[3].values[3] = 1.0f;
+
+    return result;
+}
+
+mat4 mat4_inverse_orthographic_projection(mat4 orthographic_projection)
+{
+    mat4 result = {0};
+    result.columns[0].values[0] = 1.0f / orthographic_projection.columns[0].values[0];
+    result.columns[1].values[1] = 1.0f / orthographic_projection.columns[1].values[1];
+    result.columns[2].values[2] = 1.0f / orthographic_projection.columns[2].values[2];
+    result.columns[3].values[2] = orthographic_projection.columns[3].values[2] / -orthographic_projection.columns[2].values[2];
+    result.columns[3].values[3] = 1.0f;
+
+    return result;
+}
+
 
 #ifdef __cplusplus
 }

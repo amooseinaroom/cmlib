@@ -2,6 +2,8 @@
 #if !defined mogl_h
 #define mogl_h
 
+#include "mo_gl_bindings.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -93,8 +95,6 @@ mogl_window_init_signature;
 
 #if defined mogl_implementation
 #undef mogl_implementation
-
-#include "mo_gl_bindings.h"
 
 #if defined(_WIN32) || defined(WIN32)
 
