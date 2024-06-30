@@ -1437,7 +1437,7 @@ mop_get_file_byte_count_signature
     if (!GetFileAttributesExA((mop_cstring) cpath, GetFileExInfoStandard, &data))
     {
         mop_s32 error = GetLastError();
-        mop_require(error == ERROR_FILE_NOT_FOUND);
+        mop_require((error == ERROR_FILE_NOT_FOUND) || (error == ERROR_PATH_NOT_FOUND) || (error == ERROR_SHARING_VIOLATION));
 
         return mop_sl(mop_get_file_byte_count_result) {0};
     }

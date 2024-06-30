@@ -862,8 +862,33 @@ moui_box_is_hot_signature
 
 // internal
 
+#if !defined moui_gl_symbols
+
+#define GL_TEXTURE_SWIZZLE_RGBA 0x8E46
+#define GL_VERTEX_SHADER 0x8B31
+#define GL_FRAGMENT_SHADER 0x8B30
+#define GL_COMPILE_STATUS 0x8B81
+#define GL_LINK_STATUS 0x8B82
+#define GL_ARRAY_BUFFER 0x8892
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
+#define GL_DYNAMIC_DRAW 0x88E8
+#define GL_TEXTURE0 0x84C0
+
+#define GL_DEBUG_OUTPUT             0x92E0
+#define GL_DEBUG_OUTPUT_SYNCHRONOUS 0x8242
+
+#define GL_DEBUG_SOURCE_SHADER_COMPILER 0x8248
+#define GL_DEBUG_TYPE_ERROR 0x824C
+
+#endif
+
 #define moui_platform_init_signature void moui_platform_init(moui_default_state *default_state)
 moui_platform_init_signature;
+
+#define moui_gl_debug_message_callback_signature(name) void name(moui_u32 source, moui_u32 type, moui_u32 id, moui_u32 severity, moui_u32 length, moui_cstring message, moui_u8 * userParam)
+typedef moui_gl_debug_message_callback_signature((*moui_GLDEBUGPROC_function));
+
+moui_gl_debug_message_callback_signature(moui_gl_debug_message_callback);
 
 #if defined(_WIN32) || defined(WIN32)
 
@@ -904,9 +929,6 @@ moui_wglCreateContextAttribsARB_function moui_wglCreateContextAttribsARB;
 typedef signed int (*moui_wglSwapIntervalEXT_function)(signed int interval);
 moui_wglSwapIntervalEXT_function moui_wglSwapIntervalEXT;
 
-#define moui_gl_debug_message_callback_signature(name) void name(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, GLchar *message, void * userParam)
-typedef moui_gl_debug_message_callback_signature((*moui_GLDEBUGPROC_function));
-
 typedef void (*moui_glDebugMessageCallback_function)(moui_GLDEBUGPROC_function callback, void * userParam);
 moui_glDebugMessageCallback_function moui_glDebugMessageCallback;
 
@@ -924,21 +946,6 @@ struct moui_default_state
     HGLRC   win32_gl_context;
     HDC     win32_gl_current_device_context;
 };
-
-moui_gl_debug_message_callback_signature(moui_gl_debug_message_callback)
-{
-    moui_string text = {0};
-    text.base = (moui_u8 *) message;
-
-    while (text.base[text.count] != 0)
-        text.count += 1;
-
-    // ignore compile errors, we handle them ourself
-    if (source != GL_DEBUG_SOURCE_SHADER_COMPILER)
-        printf("GL-Message: %.*s\n", moui_fs(text));
-
-    moui_assert_message((type != GL_DEBUG_TYPE_ERROR) || (source == GL_DEBUG_SOURCE_SHADER_COMPILER), "GL-Message: %.*s\n", moui_fs(text));
-}
 
 void moui_win32_gl_window_init(HDC device_context)
 {
@@ -1277,23 +1284,6 @@ void moui_gl_error(moui_cstring command, moui_cstring function, moui_u32 line)
 
 #define moui_gl_required_load(function) moui_gl_load(function); moui_require(moui_ ## function)
 
-#if !defined moui_gl_symbols
-
-#define GL_TEXTURE_SWIZZLE_RGBA 0x8E46
-#define GL_VERTEX_SHADER 0x8B31
-#define GL_FRAGMENT_SHADER 0x8B30
-#define GL_COMPILE_STATUS 0x8B81
-#define GL_LINK_STATUS 0x8B82
-#define GL_ARRAY_BUFFER 0x8892
-#define GL_ELEMENT_ARRAY_BUFFER 0x8893
-#define GL_DYNAMIC_DRAW 0x88E8
-#define GL_TEXTURE0 0x84C0
-
-#define GL_DEBUG_OUTPUT             0x92E0
-#define GL_DEBUG_OUTPUT_SYNCHRONOUS 0x8242
-
-#endif
-
 typedef GLuint (*moui_glCreateShader_function)(GLenum type);
 moui_glCreateShader_function moui_glCreateShader;
 
@@ -1365,6 +1355,21 @@ moui_glUniform1i_function moui_glUniform1i;
 
 typedef void (*moui_glActiveTexture_function)(GLenum texture);
 moui_glActiveTexture_function moui_glActiveTexture;
+
+moui_gl_debug_message_callback_signature(moui_gl_debug_message_callback)
+{
+    moui_string text = {0};
+    text.base = (moui_u8 *) message;
+
+    while (text.base[text.count] != 0)
+        text.count += 1;
+
+    // ignore compile errors, we handle them ourself
+    if (source != GL_DEBUG_SOURCE_SHADER_COMPILER)
+        printf("GL-Message: %.*s\n", moui_fs(text));
+
+    moui_assert_message((type != GL_DEBUG_TYPE_ERROR) || (source == GL_DEBUG_SOURCE_SHADER_COMPILER), "GL-Message: %.*s\n", moui_fs(text));
+}
 
 moui_create_texture_signature
 {

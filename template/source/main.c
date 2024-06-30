@@ -64,6 +64,8 @@ typedef struct
 
 program_state global_program;
 
+mop_hot_update_signature;
+
 #if 1
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 #else
@@ -85,27 +87,26 @@ int main(int argument_count, char *arguments[])
 
     program->random = random_from_win23();
 
-    // allocate font
-    s32 pixel_height = 22;
-    s32 thickness    = 2;
+    // allocate persistant assets here
+
     program->memory_asset_offset = program->memory.used_count;
-    program->font = moui_load_outlined_font_file(&platform, &program->memory, s("C:/windows/fonts/consola.ttf"), 1024, 1024, pixel_height, ' ', 96, thickness, moui_rgba_white, moui_rgba_black);
+
+    // WARNING: all memory allocation from this line on is frame temporary
 
     program->ui.base.renderer.quad_count = 1 << 20;
+    program->ui.base.renderer.vertex_count = program->ui.base.renderer.quad_count * 6;
     program->ui.base.renderer.texture_count = 64;
     program->ui.base.renderer.command_count = 1024;
 
-    // WARNING: all memory allocation from this line on is frame temporary
     program->memory_reset_offset = program->memory.used_count;
     moui_resize_buffers(&program->ui.base, &program->memory);
-
-    mop_u64 realtime_counter = mop_get_realtime_counter(&platform);
-    platform.delta_seconds = 0.0f;
-    platform.last_realtime_counter = realtime_counter;
 
 #if !mo_enable_hot_reloading
     b8 did_reload = true;
 #endif
+
+    mop_window_show(&platform, &program->window);
+    mop_update_delta_seconds(&platform);
 
     while (true)
     {
@@ -195,34 +196,24 @@ mop_hot_update_signature
 
     mouse_position = vec2_sub(mouse_position, letterbox.min);
 
-    const f32 target_height = 360;
+
+    const f32 target_height = 1080;
+    f32 ui_scale = ui_size.y / target_height;
 
     // auto resize font depending on resolution
-    if (false)
     {
-        s32 pixel_height = ceilf(16 * ui_size.y / target_height);
+        s32 pixel_height = ceilf(32 * ui_scale);
 
         if (program->font.height != pixel_height)
         {
-            program->memory.used_count = program->memory_asset_offset;
+            s32 thickness = ceilf(4 * ui_scale);
 
-            if (program->font.texture.handle)
-            {
-                u32 handle = (u32)(usize)program->font.texture.handle;
-                glDeleteTextures(1, &handle);
-            }
-
-            s32 thickness = ceilf(2 * ui_size.y / target_height);
-
-            program->font = moui_load_outlined_font_file(platform, &program->memory, s("assets/fonts/steelfis.ttf"), 1024, 1024, pixel_height, ' ', 96, thickness, moui_rgba_white, moui_rgba_black);
-
-            ui->renderer.quads = null;
-            program->memory_reset_offset = program->memory.used_count;
-            moui_resize_buffers(ui, &program->memory);
+            moui_destroy_font(&program->font);
+            moui_load_outlined_font_file(&program->font, platform, &program->memory, s("C:/windows/fonts/consola.ttf"), 1024, 1024, pixel_height, ' ', 96, thickness, moui_rgba_white, moui_rgba_black);
         }
     }
 
-    moui_simple_font font = program->font;
+    moui_simple_font *font = &program->font;
 
     moui_frame(ui, ui_size, mouse_position, platform->keys[mop_key_mouse_left].is_active << 0);
 
