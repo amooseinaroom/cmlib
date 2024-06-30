@@ -5,7 +5,7 @@
 #define mop_h
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
 #endif
 
 typedef unsigned char      mop_u8;
@@ -13,6 +13,7 @@ typedef unsigned short     mop_u16;
 typedef unsigned int       mop_u32;
 typedef unsigned long long mop_u64;
 
+typedef signed short     mop_s16;
 typedef signed int       mop_s32;
 typedef signed long long mop_s64;
 
@@ -182,6 +183,52 @@ typedef union
     mop_u8 value;
 } mop_key_state;
 
+#ifndef mop_vec2_type
+#define mop_vec2_type mop_vec2
+
+typedef union
+{
+    struct
+    {
+        mop_f32 x;
+        mop_f32 y;
+    };
+
+    mop_f32 values[2];
+} mop_vec2;
+
+#endif
+
+typedef struct
+{
+    mop_vec2_type left_stick;
+    mop_vec2_type right_stick;
+
+    mop_f32 left_trigger;
+    mop_f32 right_trigger;
+
+    mop_key_state left_thumb;
+    mop_key_state right_thumb;
+
+    mop_key_state start;
+    mop_key_state select;
+
+    mop_key_state left_shoulder;
+    mop_key_state right_shoulder;
+
+    mop_key_state dpad_down;
+    mop_key_state dpad_right;
+    mop_key_state dpad_up;
+    mop_key_state dpad_left;
+
+    mop_key_state action_down;
+    mop_key_state action_right;
+    mop_key_state action_up;
+    mop_key_state action_left;
+
+    mop_b8 is_enabled;
+} mop_gamepad;
+
 typedef enum
 {
     mop_week_day_monday,
@@ -251,8 +298,18 @@ mop_fatal_error_signature;
 #define mop_init_signature void mop_init(mop_platform *platform)
 mop_init_signature;
 
+// starts off hidden
 #define mop_window_init_signature void mop_window_init(mop_platform *platform, mop_window *window, mop_cstring title, mop_s32 width, mop_s32 height)
 mop_window_init_signature;
+
+#define mop_window_set_icon_signature void mop_window_set_icon(mop_platform *platform, mop_window *window, mop_cstring icon_name)
+mop_window_set_icon_signature;
+
+#define mop_window_show_signature void mop_window_show(mop_platform *platform, mop_window *window)
+mop_window_show_signature;
+
+#define mop_window_set_fullscreen_signature void mop_window_set_fullscreen(mop_platform *platform, mop_window *window, mop_b8 enable_fullscreen)
+mop_window_set_fullscreen_signature;
 
 #define mop_window_get_info_signature mop_window_info mop_window_get_info(mop_platform *platform, mop_window *window)
 mop_window_get_info_signature;
@@ -268,6 +325,9 @@ mop_get_program_directory_signature;
 
 #define mop_get_working_directory_signature mop_string mop_get_working_directory(mop_platform *platform)
 mop_get_working_directory_signature;
+
+#define mop_update_delta_seconds_signature void mop_update_delta_seconds(mop_platform *platform)
+mop_update_delta_seconds_signature;
 
 #define mop_handle_messages_signature void mop_handle_messages(mop_platform *platform)
 mop_handle_messages_signature;
@@ -286,6 +346,12 @@ mop_get_file_byte_count_signature;
 
 #define mop_get_file_write_timestamp_signature mop_u64 mop_get_file_write_timestamp(mop_platform *platform, mop_string path)
 mop_get_file_write_timestamp_signature;
+
+// left < right  => -1
+// left == right =>  0
+// left > right  =>  1
+#define mop_compare_timestamps_signature mop_s32 mop_compare_timestamps(mop_platform *platform, mop_u64 left, mop_u64 right)
+mop_compare_timestamps_signature;
 
 #define mop_normalize_path_signature void mop_normalize_path(mop_string *path)
 mop_normalize_path_signature;
@@ -375,6 +441,9 @@ mop_debug_break_signature;
 #define mop_key_state_was_pressed_signature mop_b8 mop_key_state_was_pressed(mop_key_state state)
 mop_key_state_was_pressed_signature;
 
+#define mop_key_state_consume_pressed_signature mop_b8 mop_key_state_consume_pressed(mop_key_state *state)
+mop_key_state_consume_pressed_signature;
+
 #define mop_key_state_was_released_signature mop_b8 mop_key_state_was_released(mop_key_state state)
 mop_key_state_was_released_signature;
 
@@ -402,6 +471,11 @@ mop_key_event_update_signature;
 #define mop_key_poll_update_signature void mop_key_poll_update(mop_platform *platform, mop_u32 key, mop_b8 is_active)
 mop_key_poll_update_signature;
 
+#define mop_gamepad_count 4
+
+#define mop_get_gamepad_signature mop_gamepad mop_get_gamepad(mop_platform *platform, mop_u32 index)
+mop_get_gamepad_signature;
+
 const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
 
 #ifdef __cplusplus
@@ -410,7 +484,7 @@ const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
 // even though we are already in an 'extern "C"' scope
 #define mop_hot_update_signature extern "C" __declspec(dllexport) mop_hot_update_type(mop_hot_update)
 
-}
+
 
 #else
 
@@ -443,6 +517,7 @@ const mop_u32 mop_month_day_count[12] =
 #if defined(_WIN32) || defined(WIN32)
 
 #include <windows.h>
+#include <xinput.h>
 #include <stdio.h>
 #include <intrin.h>
 
@@ -492,6 +567,7 @@ enum mop_key
     mop_key_down  = VK_DOWN,
     mop_key_up    = VK_UP,
 
+    mop_key_shift   = VK_SHIFT,
     mop_key_control = VK_CONTROL,
     mop_key_alt     = VK_MENU,
 
@@ -508,6 +584,11 @@ typedef struct
     mop_u32 count;
 } mop_win32_close_window_requests;
 
+struct mop_library
+{
+    HMODULE module;
+};
+
 struct mop_platform
 {
     mop_character characters[32];
@@ -516,6 +597,7 @@ struct mop_platform
     mop_b8  previous_character_was_key_down;
 
     mop_key_state keys[256];
+    mop_gamepad gamepads[mop_gamepad_count];
 
     mop_u8     program_directory_buffer[mop_path_max_count];
     mop_string program_directory;
@@ -537,25 +619,26 @@ struct mop_platform
 
     struct
     {
+        HINSTANCE   instance;
+        mop_library xinput_library;
         POINT cursor;
     } win32;
 };
 
 struct mop_window
 {
-    HWND handle;
-    HDC  device_context;
+    b8              is_hidden;
+    b8              is_fullscreen;
+
+    HWND            handle;
+    HDC             device_context;
+    WINDOWPLACEMENT placement_backup;
 };
 
 struct mop_thread
 {
     HANDLE handle;
     mop_u8 is_running;
-};
-
-struct mop_library
-{
-    HMODULE module;
 };
 
 struct mop_hot_reload_state
@@ -578,7 +661,27 @@ struct mop_file_search_iterator
 
 const mop_cstring mop_win32_window_class_name = "window class";
 
+#define mop_XInputGetState_signature(name) DWORD name(DWORD dwUserIndex, XINPUT_STATE *pState)
+typedef mop_XInputGetState_signature((*mop_XInputGetState_type));
+
+#define mop_XInputGetCapabilities_signature(name) DWORD name(DWORD dwUserIndex, DWORD dwFlags, XINPUT_CAPABILITIES *pCapabilities)
+typedef mop_XInputGetCapabilities_signature((*mop_XInputGetCapabilities_type));
+
+mop_XInputGetState_type        mop_XInputGetState;
+mop_XInputGetCapabilities_type mop_XInputGetCapabilities;
+
 mop_win32_close_window_requests mop_win32_global_close_window_requests;
+mop_b8                          mop_win32_global_check_gamepad_connections;
+
+mop_XInputGetState_signature(mop_dummy_XInputGetState)
+{
+    return 0;
+}
+
+mop_XInputGetCapabilities_signature(mop_dummy_XInputGetCapabilities)
+{
+    return 0;
+}
 
 mop_fatal_error_signature
 {
@@ -668,6 +771,11 @@ LRESULT CALLBACK mop_win32_window_callback(HWND window_handle, UINT msg, WPARAM 
         {
             return MNC_CLOSE << 16;
         } break;
+
+        case WM_DEVICECHANGE:
+        {
+            mop_win32_global_check_gamepad_connections = true;
+        } break;
     }
 
     return DefWindowProc(window_handle, msg, w_param, l_param);
@@ -687,6 +795,27 @@ mop_init_signature
     window_class.style         = CS_OWNDC;
 
     mop_require(RegisterClass(&window_class));
+
+    platform->win32.instance = instance;
+
+    platform->win32.xinput_library = {0};
+    if (mop_load_library(platform, &platform->win32.xinput_library, mop_s("Xinput1_4")) ||
+        mop_load_library(platform, &platform->win32.xinput_library, mop_s("Xinput1_3")) ||
+        mop_load_library(platform, &platform->win32.xinput_library, mop_s("Xinput9_1_0")))
+    {
+        mop_XInputGetState        = (mop_XInputGetState_type) mop_load_symbol(platform, &platform->win32.xinput_library, mop_s("XInputGetState"));
+        mop_XInputGetCapabilities = (mop_XInputGetCapabilities_type) mop_load_symbol(platform, &platform->win32.xinput_library, mop_s("XInputGetCapabilities"));
+
+        mop_win32_global_check_gamepad_connections = true;
+    }
+    else
+    {
+        mop_XInputGetState        = mop_dummy_XInputGetState;
+        mop_XInputGetCapabilities = mop_dummy_XInputGetCapabilities;
+    }
+
+    mop_require(mop_XInputGetState);
+    mop_require(mop_XInputGetCapabilities);
 }
 
 mop_window_init_signature
@@ -703,16 +832,73 @@ mop_window_init_signature
     window->handle = CreateWindowExA(0, mop_win32_window_class_name, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, client_rect.right - client_rect.left, client_rect.bottom - client_rect.top, mop_null, mop_null, (HINSTANCE) GetModuleHandleA(mop_null), mop_null);
     mop_require(window->handle);
 
-    ShowWindow(window->handle, SW_SHOW);
-
     window->device_context = GetDC(window->handle);
     mop_require(window->device_context);
 
     mop_require(QueryPerformanceFrequency((LARGE_INTEGER *) &platform->realtime_counter_ticks_per_second));
+
+    window->is_hidden = true;
+}
+
+mop_window_set_icon_signature
+{
+    HICON icon = LoadIconA(platform->win32.instance, icon_name);
+    if (icon)
+        SetClassLongPtrA(window->handle, GCLP_HICON, (LONG_PTR) icon);
+}
+
+mop_window_show_signature
+{
+    assert(window->is_hidden);
+    ShowWindow(window->handle, SW_SHOW);
+    window->is_hidden = false;
+}
+
+mop_window_set_fullscreen_signature
+{
+    if (window->is_fullscreen == enable_fullscreen)
+        return;
+
+    mop_u32 style = GetWindowLongA(window->handle, GWL_STYLE);
+    if (style & WS_OVERLAPPEDWINDOW)
+    {
+        mop_assert(!window->is_fullscreen);
+
+        MONITORINFO monitor_info;
+        monitor_info.cbSize = sizeof(MONITORINFO);
+        mop_require(GetWindowPlacement(window->handle, &window->placement_backup) && GetMonitorInfoA(MonitorFromWindow(window->handle, MONITOR_DEFAULTTOPRIMARY), &monitor_info));
+        // window->size.width  = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+        // window->size.height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+
+        SetWindowLongA(window->handle, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+        SetWindowPos(window->handle, HWND_TOP,
+                        monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                        monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                        monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+
+
+    }
+    else
+    {
+        mop_assert(window->is_fullscreen);
+
+        style |= WS_OVERLAPPEDWINDOW;
+
+        //if (!window->is_resizeable)
+        //style &= ~WS_THICKFRAME;
+
+        SetWindowLongA(window->handle, GWL_STYLE, style);
+        SetWindowPlacement(window->handle, &window->placement_backup);
+        SetWindowPos(window->handle, null, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    }
+
+    window->is_fullscreen = enable_fullscreen;
 }
 
 mop_window_get_info_signature
 {
+    assert(!window->is_hidden);
+
     RECT client_rect;
     mop_require(GetClientRect(window->handle, &client_rect));
 
@@ -879,6 +1065,54 @@ mop_get_program_directory_signature
     }
 
     return platform->program_directory;
+}
+
+mop_f32 mop_win32_get_xinput_stick_axis(mop_s32 raw_value, mop_s16 threshold)
+{
+    mop_f32 value;
+
+    if (raw_value > 0)
+    {
+        if (raw_value < threshold)
+            raw_value = 0;
+
+        value = raw_value / 32768.0f;
+    }
+    else
+    {
+        if (raw_value > -threshold)
+            raw_value = 0;
+
+        value = raw_value / 32767.0f;
+    }
+
+    return value;
+}
+
+mop_vec2_type mop_win32_get_xinput_stick_direction(mop_s16 stick_x, mop_s16 stick_y, mop_s16 threshold)
+{
+    mop_vec2_type direction;
+    direction.x = mop_win32_get_xinput_stick_axis(stick_x, threshold);
+    direction.y = mop_win32_get_xinput_stick_axis(stick_y, threshold);
+
+    return direction;
+}
+
+mop_f32 mop_win32_get_xinput_trigger_value(mop_u8 raw_value)
+{
+    if (raw_value < XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+        raw_value = 0;
+
+    mop_f32 value = raw_value / 255.0f;
+    return value;
+}
+
+mop_update_delta_seconds_signature
+{
+
+    mop_u64 realtime_counter = mop_get_realtime_counter(platform);
+    platform->delta_seconds = (mop_f32) (realtime_counter - platform->last_realtime_counter) / platform->realtime_counter_ticks_per_second;
+    platform->last_realtime_counter = realtime_counter;
 }
 
 mop_handle_messages_signature
@@ -1066,6 +1300,68 @@ mop_handle_messages_signature
     mop_key_poll_update(platform, VK_MBUTTON, (GetAsyncKeyState(VK_MBUTTON) >> 15) & 1);
     mop_key_poll_update(platform, VK_RBUTTON, (GetAsyncKeyState(VK_RBUTTON) >> 15) & 1);
 
+    // poll gamepads
+    {
+        // this is expensive, so we use a flag
+        if (mop_win32_global_check_gamepad_connections)
+        {
+            mop_win32_global_check_gamepad_connections = false;
+
+            for (mop_u32 i = 0; i < XUSER_MAX_COUNT; i++)
+            {
+                XINPUT_CAPABILITIES capabilites;
+                platform->gamepads[i].is_enabled = (mop_XInputGetCapabilities(i, XINPUT_FLAG_GAMEPAD, &capabilites) == ERROR_SUCCESS);
+            }
+        }
+
+        for (mop_u32 i = 0; i < XUSER_MAX_COUNT; i++)
+        {
+            if (!platform->gamepads[i].is_enabled)
+                continue;
+
+            mop_gamepad *gamepad = &platform->gamepads[i];
+
+            XINPUT_STATE state;
+
+            mop_u32 result = mop_XInputGetState(i, &state);
+            if (result != ERROR_SUCCESS)
+            {
+                gamepad->is_enabled = false;
+                continue;
+            }
+
+            gamepad->left_stick  = mop_win32_get_xinput_stick_direction(state.Gamepad.sThumbLX, state.Gamepad.sThumbLY,  XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+            gamepad->right_stick = mop_win32_get_xinput_stick_direction(state.Gamepad.sThumbRX, state.Gamepad.sThumbRY,  XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+
+            gamepad->left_trigger  = mop_win32_get_xinput_trigger_value(state.Gamepad.bLeftTrigger);
+            gamepad->right_trigger = mop_win32_get_xinput_trigger_value(state.Gamepad.bRightTrigger);
+
+            //mop_key_state_poll_update(&gamepad->left_stick_as_button, (gamepad->left_stick.x is_not 0) or (gamepad->left_stick.y is_not 0));
+            //mop_key_state_poll_update(&gamepad->right_stick_as_button, (gamepad->right_stick.x is_not 0) or (gamepad->right_stick.y is_not 0));
+            //mop_key_state_poll_update(&gamepad->left_trigger_as_button, gamepad->left_trigger is_not 0);
+            //mop_key_state_poll_update(&gamepad->right_trigger_as_button, gamepad->right_trigger is_not 0);
+
+            mop_key_state_poll_update(&gamepad->dpad_up,    (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP) != 0);
+            mop_key_state_poll_update(&gamepad->dpad_down,  (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN) != 0);
+            mop_key_state_poll_update(&gamepad->dpad_right, (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0);
+            mop_key_state_poll_update(&gamepad->dpad_left,  (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT) != 0);
+
+            mop_key_state_poll_update(&gamepad->action_down,  (state.Gamepad.wButtons & XINPUT_GAMEPAD_A) != 0);
+            mop_key_state_poll_update(&gamepad->action_right, (state.Gamepad.wButtons & XINPUT_GAMEPAD_B) != 0);
+            mop_key_state_poll_update(&gamepad->action_left,  (state.Gamepad.wButtons & XINPUT_GAMEPAD_X) != 0);
+            mop_key_state_poll_update(&gamepad->action_up,    (state.Gamepad.wButtons & XINPUT_GAMEPAD_Y) != 0);
+
+            mop_key_state_poll_update(&gamepad->left_shoulder,  (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0);
+            mop_key_state_poll_update(&gamepad->right_shoulder, (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0);
+
+            mop_key_state_poll_update(&gamepad->left_thumb,  (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0);
+            mop_key_state_poll_update(&gamepad->right_thumb, (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0);
+
+            mop_key_state_poll_update(&gamepad->select, (state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK) != 0);
+            mop_key_state_poll_update(&gamepad->start,  (state.Gamepad.wButtons & XINPUT_GAMEPAD_START) != 0);
+        }
+    }
+
     POINT cursor;
     GetCursorPos(&cursor);
     platform->win32.cursor = cursor;
@@ -1078,9 +1374,7 @@ mop_handle_messages_signature
     platform->mouse_position.x = cursor.x;
     platform->mouse_position.y = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top - cursor.y;
 
-    mop_u64 realtime_counter = mop_get_realtime_counter(platform);
-    platform->delta_seconds = (mop_f32) (realtime_counter - platform->last_realtime_counter) / platform->realtime_counter_ticks_per_second;
-    platform->last_realtime_counter = realtime_counter;
+    mop_update_delta_seconds(platform);
 }
 
 mop_get_characters_signature
@@ -1167,6 +1461,11 @@ mop_get_file_write_timestamp_signature
     }
 
     return *(mop_u64 *) &data.ftLastWriteTime;
+}
+
+mop_compare_timestamps_signature
+{
+    return (mop_s32) CompareFileTime((FILETIME *) &left, (FILETIME *) &right);
 }
 
 mop_path_is_directory_signature
@@ -1768,10 +2067,24 @@ mop_key_poll_update_signature
     mop_key_state_poll_update(&platform->keys[key], is_active);
 }
 
+mop_get_gamepad_signature
+{
+    assert(index < mop_carray_count(platform->gamepads));
+    return platform->gamepads[index];
+}
 
 mop_key_state_was_pressed_signature
 {
     return state.half_transition_overflow || (state.half_transition_count >= 2 - state.is_active);
+}
+
+mop_key_state_consume_pressed_signature
+{
+    b8 was_pressed = mop_key_state_was_pressed(*state);
+    if (was_pressed)
+        state->value = state->is_active;
+
+    return was_pressed;
 }
 
 mop_key_state_was_released_signature

@@ -80,11 +80,58 @@ array_type(u8_array, u8);
 #define moma_u8_array_type u8_array
 #define moa_u8_array_type  u8_array
 
-// HACK:
-#define box2  moui_box2
-#define vec2  moui_vec2
-#define rgba  moui_rgba
-#define rgba8 moui_rgba8
+typedef union
+{
+    struct
+    {
+        f32 x;
+        f32 y;
+    };
+
+    f32 values[2];
+} vec2;
+
+typedef union
+{
+    struct
+    {
+        vec2 min;
+        vec2 max;
+    };
+
+    vec2 extends[2];
+
+    f32 values[4];
+} box2;
+
+typedef struct
+{
+    f32 r;
+    f32 g;
+    f32 b;
+    f32 a;
+} rgba;
+
+typedef union
+{
+    struct {
+        u8 r;
+        u8 g;
+        u8 b;
+        u8 a;
+    };
+
+    u32 value;
+} rgba8;
+
+#define mop_vec2_type   vec2
+#define moui_vec2_type  vec2
+#define moui_box2_type  box2
+#define moui_rgba_type  rgba
+#define moui_rgba8_type rgba8
+
+const rgba rgba_black = { 0, 0, 0, 1 };
+const rgba rgba_white = { 1, 1, 1, 1 };
 
 typedef u8_array string;
 
@@ -117,6 +164,8 @@ copy_signature;
 #define flag32(bit) (((u32) 1) << (bit))
 #define flag64(bit) (((u64) 1) << (bit))
 
+#define mo_swap(type, a, b) do { type temp = a; a = b; b = temp; } while(false)
+
 // for use in macro lists
 
 #define mo_enum_item(name, prefix) prefix ## name,
@@ -134,6 +183,10 @@ copy_signature;
     { \
         list_macro(mo_string_item) \
     } \
+
+#define  mo_enum_and_string_list(name, list_macro) \
+    mo_enum_list(name, list_macro); \
+    mo_string_list(name ## _names, list_macro) \
 
 // example:
 //

@@ -12,54 +12,10 @@ extern "C" {
 
 const f32 pi32 = 3.14159265;
 
-// HACK:
-#if !defined(moui_h)
-
-typedef union
-{
-    struct
-    {
-        f32 x;
-        f32 y;
-    };
-
-    f32 values[2];
-} moui_vec2;
-
-typedef union
-{
-    struct
-    {
-        moui_vec2 min;
-        moui_vec2 max;
-    };
-
-    moui_vec2 extends[2];
-
-    f32 values[4];
-} moui_box2;
-
-typedef struct
-{
-    f32 r;
-    f32 g;
-    f32 b;
-    f32 a;
-} moui_rgba;
-
-typedef union
-{
-    struct {
-        u8 r;
-        u8 g;
-        u8 b;
-        u8 a;
-    };
-
-    u32 value;
-} moui_rgba8;
-
-#endif
+const vec2 vec2_zero = {0};
+const vec2 vec2_one = { 1, 1 };
+const vec2 vec2_x   = { 1, 0 };
+const vec2 vec2_y   = { 0, 1 };
 
 typedef union
 {
@@ -67,6 +23,8 @@ typedef union
     {
         f32 x, y, z;
     };
+
+    vec2 xy;
 
     f32 values[3];
 } vec3;
@@ -225,14 +183,21 @@ vec3 vec3_normalize(vec3 vector)
     return result;
 }
 
-vec3 vec3_normalize_or_zero(vec3 vector)
+
+vec3 vec3_normalize_safe(vec3 vector, vec3 fallback)
 {
     f32 length_squared = vec3_length_squared(vector);
     if (length_squared > 0)
         return vec3_divs(vector, sqrtf(length_squared));
     else
-        return vec3_zero;
+        return fallback;
 }
+
+vec3 vec3_normalize_or_zero(vec3 vector)
+{
+    return vec3_normalize_safe(vector, vec3_zero);
+}
+
 
 vec3 vec3_min(vec3 a, vec3 b)
 {
@@ -271,6 +236,9 @@ typedef union
     {
         f32 r, g, b, a;
     };
+
+    vec2 xy;
+    vec2 rg;
 
     vec3 xyz;
     vec3 rgb;
@@ -324,6 +292,37 @@ typedef struct
     f32  radius;
 } sphere3;
 
+u32 u32_clamp(u32 value, u32 min, u32 max)
+{
+    if (value < min)
+        value = min;
+    else if (value > max)
+        value = max;
+
+    return value;
+}
+
+s32 s32_clamp(s32 value, s32 min, s32 max)
+{
+    if (value < min)
+        value = min;
+    else if (value > max)
+        value = max;
+
+    return value;
+}
+
+
+f32 f32_clamp(f32 value, f32 min, f32 max)
+{
+    if (value < min)
+        value = min;
+    else if (value > max)
+        value = max;
+
+    return value;
+}
+
 f32 f32_lerp(f32 a, f32 b, f32 blend)
 {
     return a * (1 - blend) + b * blend;
@@ -338,12 +337,30 @@ vec2 vec2_add(vec2 a, vec2 b)
     };
 }
 
+vec2 vec2_adds(vec2 a, f32 b)
+{
+    return sl(vec2)
+    {
+        a.x + b,
+        a.y + b,
+    };
+}
+
 vec2 vec2_sub(vec2 a, vec2 b)
 {
     return sl(vec2)
     {
         a.x - b.x,
         a.y - b.y,
+    };
+}
+
+vec2 vec2_subs(vec2 a, f32 b)
+{
+    return sl(vec2)
+    {
+        a.x - b,
+        a.y - b,
     };
 }
 
@@ -396,6 +413,11 @@ vec2 vec2_normalize_safe(vec2 vector, vec2 fallback)
     return vec2_muls(vector, 1.0f / length);
 }
 
+vec2 vec2_normalize_or_zero(vec2 vector)
+{
+    return vec2_normalize_safe(vector, vec2_zero);
+}
+
 vec2 vec2_floor(vec2 vector)
 {
     return sl(vec2) { floorf(vector.x), floorf(vector.y) };
@@ -404,6 +426,15 @@ vec2 vec2_floor(vec2 vector)
 vec2 vec2_ceil(vec2 vector)
 {
     return sl(vec2) { ceilf(vector.x), ceilf(vector.y) };
+}
+
+vec2 vec2_abs(vec2 a)
+{
+    return sl(vec2)
+    {
+        fabsf(a.x),
+        fabsf(a.y),
+    };
 }
 
 vec2 vec2_lerps(vec2 a, vec2 b, f32 blend)
@@ -967,6 +998,63 @@ typedef union
 {
     struct
     {
+        vec3 min;
+        vec3 max;
+    };
+
+    vec3 extends[2];
+
+    f32 values[6];
+} box3;
+
+box3 box3_merge(box3 a, box3 b)
+{
+    a.min.x = min(a.min.x, b.min.x);
+    a.min.y = min(a.min.y, b.min.y);
+    a.min.z = min(a.min.z, b.min.z);
+    a.max.x = max(a.max.x, b.max.x);
+    a.max.y = max(a.max.y, b.max.y);
+    a.max.z = max(a.max.z, b.max.z);
+    return a;
+}
+
+box3 box3_merge_point(box3 a, vec3 b)
+{
+    a.min.x = min(a.min.x, b.x);
+    a.min.y = min(a.min.y, b.y);
+    a.min.z = min(a.min.z, b.z);
+    a.max.x = max(a.max.x, b.x);
+    a.max.y = max(a.max.y, b.y);
+    a.max.z = max(a.max.z, b.z);
+    return a;
+}
+
+b8 box3_overlap(box3 a, box3 b)
+{
+    return (a.min.x < b.max.x) && (b.min.x < a.max.x) && (a.min.y < b.max.y) && (b.min.y < a.max.y);
+    //return !((a.min.x >= b.max.x) || (b.min.x >= a.max.x) || (a.min.y >= b.max.y) || (b.min.y >= a.max.y));
+}
+
+box3 box3_grow(box3 box, f32 border)
+{
+    box.min.x -= border;
+    box.max.x += border;
+    box.min.y -= border;
+    box.max.y += border;
+    return box;
+}
+
+box3 box3_move(box3 box, vec3 offset)
+{
+    box.min = vec3_add(box.min, offset);
+    box.max = vec3_add(box.max, offset);
+    return box;
+}
+
+typedef union
+{
+    struct
+    {
         f32 w, x, y, z;
     };
 
@@ -1008,7 +1096,7 @@ quat quat_between_normals(vec3 from_normal, vec3 to_normal)
     return quat_axis_angle(normalized_rotation_axis, angle);
 }
 
-quat multiply(quat second, quat first)
+quat quat_mul(quat second, quat first)
 {
     quat result =
     {
@@ -1060,12 +1148,11 @@ const mat4 mat4_identity = {
 vec4 mat4_mulv(mat4 transform, vec4 vector)
 {
     vec4 result =
-    {
         vec4_add(vec4_muls(transform.columns[0], vector.x),
         vec4_add(vec4_muls(transform.columns[1], vector.y),
         vec4_add(vec4_muls(transform.columns[2], vector.z),
-        vec4_muls(transform.columns[3], vector.w))))
-    };
+        vec4_muls(transform.columns[3], vector.w))));
+
     return result;
 }
 
@@ -1288,6 +1375,44 @@ mat4 mat4_inverse_orthographic_projection(mat4 orthographic_projection)
     return result;
 }
 
+vec3 box3_transformed_corner(mat4 transform, box3 box, u32 corner)
+{
+    assert(corner < 8);
+    vec3 blend = { (f32) (corner & 1), (f32) ((corner >> 1) & 1), (f32) ((corner >> 2) & 1) };
+    vec3 point = vec3_lerp(box.min, box.max, blend);
+    vec3 world_point = mat4_transform(transform, point);
+    return world_point;
+}
+
+#if 0
+b8 box3_transfored_overlap(mat4 to_left_transform, box3 left_box, mat4 ro_right_transform, box3 right_box)
+{
+    box3 left_world_box;
+    left_world_box.min = box3_transformed_corner(left_to_world_transform, left_local_box, 0);
+    left_world_box.max = left_world_box.min;
+    for (u32 i = 1; i < 8; i++)
+    {
+        vec3 left_world_point = box3_transformed_corner(left_to_world_transform, left_local_box, i);
+        left_world_box = box3_merge_point(left_world_box, left_world_point);
+    }
+
+    if (!box3_overlap(left_world_box, right_world_box))
+        return false;
+
+    mat4 right_to_local_transform = mat4_inverse_unscaled_transform(left_to_world_transform);
+
+    box3 right_local_box;
+    right_local_box.min = box3_transformed_corner(right_to_local_transform, right_world_box, 0);
+    right_local_box.max = right_local_box.min;
+    for (u32 i = 1; i < 8; i++)
+    {
+        vec3 right_local_point = box3_transformed_corner(right_to_local_transform, right_world_box, i);
+        right_local_box = box3_merge_point(right_local_box, right_local_point);
+    }
+
+    return box3_overlap(left_local_box, right_local_box);
+}
+#endif
 
 #ifdef __cplusplus
 }

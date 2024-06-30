@@ -78,11 +78,18 @@ typedef moa_u8_array moa_string;
 
 const moa_string moa_string_empty = {0};
 
-typedef struct moa_audio moa_audio;
-struct moa_audio;
+typedef struct
+{
+    u8 *platform[2];
+} moa_audio;
 
-typedef struct moa_track moa_track;
-struct moa_track;
+typedef struct
+{
+    moa_u32 frequency;
+    moa_u32 channel_count;
+
+    u8 *platform[1];
+} moa_track;
 
 typedef struct
 {
@@ -103,6 +110,9 @@ moa_track_set_volume_signature;
 
 #define moa_track_queue_signature void moa_track_queue(moa_audio *audio, moa_track *track, moa_u32 sample_count, moa_u16 *samples, moa_u32 frequency, moa_u32 channel_count, moa_b8 do_loop)
 moa_track_queue_signature;
+
+#define moa_track_queue_samples_signature void moa_track_queue_samples(moa_audio *audio, moa_track *track, moa_samples samples, moa_b8 do_loop)
+moa_track_queue_samples_signature;
 
 #define moa_track_play_signature void moa_track_play(moa_audio *audio, moa_track *track)
 moa_track_play_signature;
@@ -139,38 +149,46 @@ moa_load_wave_samples_from_file_signature;
 #pragma comment(lib, "xaudio2")
 #pragma comment(lib, "ole32")
 
-struct moa_audio
+typedef struct
 {
     IXAudio2               *x_audio2;
     IXAudio2MasteringVoice *master_voice;
-};
+} moa_audio_win32;
 
-struct moa_track
+typedef struct
 {
     moa_u32 frequency;
     moa_u32 channel_count;
 
-    // platform specific
     IXAudio2SourceVoice *source_voice;
-};
+} moa_track_win32;
+
+#define mop_get_audio_win32() assert(sizeof(moa_audio_win32) <= sizeof(moa_audio)); moa_audio_win32 *audio_win32 = (moa_audio_win32 *) audio;
+
+#define moa_get_track_win32() assert(sizeof(moa_track_win32) <= sizeof(moa_track)); moa_track_win32 *track_win32 = (moa_track_win32 *) track;
 
 moa_init_signature
 {
+    mop_get_audio_win32();
+
     moa_require(CoInitializeEx(moa_null, COINIT_MULTITHREADED) != RPC_E_CHANGED_MODE);
 
-    HRESULT result = XAudio2Create(&audio->x_audio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
+    HRESULT result = XAudio2Create(&audio_win32->x_audio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
     moa_require(result == S_OK);
 
-    result = audio->x_audio2->CreateMasteringVoice(&audio->master_voice);
+    result = audio_win32->x_audio2->CreateMasteringVoice(&audio_win32->master_voice);
     moa_require(result == S_OK);
 }
 
 moa_track_init_signature
 {
-    IXAudio2 *x_audio2 = audio->x_audio2;
+    mop_get_audio_win32();
+    moa_get_track_win32();
+
+    IXAudio2 *x_audio2 = audio_win32->x_audio2;
     moa_assert(x_audio2);
 
-    moa_assert(!track->source_voice);
+    moa_assert(!track_win32->source_voice);
 
     track->frequency     = frequency;
     track->channel_count = channel_count;
@@ -183,19 +201,21 @@ moa_track_init_signature
     format.wBitsPerSample = sizeof(moa_u16) * 8;
     format.nBlockAlign    = sizeof(moa_u16) * format.nChannels;
     // format.cbSize = 0;
-    moa_require(x_audio2->CreateSourceVoice(&track->source_voice, (WAVEFORMATEX*) &format) == S_OK);
+    moa_require(x_audio2->CreateSourceVoice(&track_win32->source_voice, (WAVEFORMATEX*) &format) == S_OK);
 }
 
 moa_track_set_volume_signature
 {
-    moa_assert(track->source_voice);
-
-    track->source_voice->SetVolume(volume_ratio);
+    moa_get_track_win32();
+    moa_assert(track_win32->source_voice);
+    track_win32->source_voice->SetVolume(volume_ratio, XAUDIO2_COMMIT_NOW);
 }
 
 moa_track_queue_signature
 {
-    moa_assert(track->source_voice);
+    moa_get_track_win32();
+
+    moa_assert(track_win32->source_voice);
     moa_assert(track->frequency == frequency);
     moa_assert(track->channel_count == channel_count);
 
@@ -213,29 +233,39 @@ moa_track_queue_signature
 
     moa_assert(buffer.AudioBytes <= XAUDIO2_MAX_BUFFER_BYTES);
 
-    HRESULT result = track->source_voice->SubmitSourceBuffer(&buffer);
+    HRESULT result = track_win32->source_voice->SubmitSourceBuffer(&buffer);
     moa_require(result == S_OK);
+}
+
+moa_track_queue_samples_signature
+{
+    moa_track_queue(audio, track, samples.count, samples.base, samples.frequency, samples.channel_count, do_loop);
 }
 
 moa_track_play_signature
 {
-    moa_assert(track->source_voice);
-    track->source_voice->Start(0);
+    moa_get_track_win32();
+    moa_assert(track_win32->source_voice);
+
+    track_win32->source_voice->Start(0);
 }
 
 moa_track_stop_signature
 {
-    moa_assert(track->source_voice);
-    track->source_voice->Stop(0);
-    track->source_voice->FlushSourceBuffers();
+    moa_get_track_win32();
+    moa_assert(track_win32->source_voice);
+
+    track_win32->source_voice->Stop(0);
+    track_win32->source_voice->FlushSourceBuffers();
 }
 
 moa_track_queue_is_empty_signature
 {
-    moa_assert(track->source_voice);
+    moa_get_track_win32();
+    moa_assert(track_win32->source_voice);
 
     XAUDIO2_VOICE_STATE state;
-    track->source_voice->GetState(&state);
+    track_win32->source_voice->GetState(&state);
     return (state.BuffersQueued == 0);
 }
 
