@@ -484,8 +484,6 @@ const mop_string mop_hot_update_name = mop_sc("mop_hot_update");
 // even though we are already in an 'extern "C"' scope
 #define mop_hot_update_signature extern "C" __declspec(dllexport) mop_hot_update_type(mop_hot_update)
 
-
-
 #else
 
 // in C, we don't want to add 'extern "C"'
@@ -508,6 +506,9 @@ const mop_u32 mop_month_day_count[12] =
     30, // november
     31, // december
 };
+
+#define mop_has_avx_support_signature mop_b8 mop_has_avx_support(mop_platform *platform)
+mop_has_avx_support_signature;
 
 #endif
 
@@ -2116,6 +2117,21 @@ mop_key_was_released_signature
     mop_assert(key < mop_carray_count(platform->keys));
     mop_key_state state = platform->keys[key];
     return mop_key_state_was_released(state);
+}
+
+mop_has_avx_support_signature
+{
+    // from: https://gist.github.com/hi2p-perim/7855506
+    // quote:
+    // Check AVX support
+	// References
+	// http://software.intel.com/en-us/blogs/2011/04/14/is-avx-enabled/
+	// http://insufficientlycomplicated.wordpress.com/2011/11/07/detecting-intel-advanced-vector-extensions-avx-in-visual-studio/
+
+    mop_s32 cpuinfo[4];
+	__cpuid(cpuinfo, 1);
+    mop_b8 ok = (cpuinfo[2] & (1 << 28)) != 0;
+    return ok;
 }
 
 #endif

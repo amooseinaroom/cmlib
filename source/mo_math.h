@@ -219,7 +219,7 @@ vec3 vec3_lerps(vec3 from, vec3 to, f32 ratio)
     return vec3_add(vec3_muls(from, 1.0f - ratio), vec3_muls(to, ratio));
 }
 
-vec3 reflect(vec3 normal, vec3 in_direction)
+vec3 vec3_reflect(vec3 normal, vec3 in_direction)
 {
     vec3 out_direction = vec3_sub(in_direction, vec3_muls(normal, vec3_dot(normal, in_direction) * 2));
     return out_direction;
@@ -514,7 +514,14 @@ b8 f32_is_zero(f32 a)
     return fabsf(a) < f32_epsilon;
 }
 
-b8 ray_plane_cast(f32 *out_distance, ray3 ray, plane3 plane)
+
+typedef struct
+{
+    b8  ok;
+    f32 distance;
+} ray3_hit;
+
+ray3_hit ray_plane_cast_ex(ray3 ray, plane3 plane)
 {
     // dot(ray.origin + ray.direction * distance, plane.normal) - plane.normal_dot_position == 0
 
@@ -522,25 +529,46 @@ b8 ray_plane_cast(f32 *out_distance, ray3 ray, plane3 plane)
     // distance == plane.normal_dot_position - dot(ray.origin, plane.normal) / dot(ray.direction, plane.normal)
 
     f32 b = vec3_dot(ray.direction, plane.normal);
-    if (b >= f32_epsilon) // is positive
-        return false;
+    if (b == 0)
+        return sl(ray3_hit) { false };
+
+    //if (b >= f32_epsilon) // is positive
+        //return false;
 
     f32 a = vec3_dot(ray.origin, plane.normal);
     f32 distance = (plane.normal_dot_position - a) / b;
 
-    if (distance < f32_epsilon) // is negative
-        return false;
+    return sl(ray3_hit) { true, distance };
 
-    if (*out_distance < distance)
-        return false;
+    //if (distance < f32_epsilon) // is negative
+        //return false;
 
-    *out_distance = distance;
-    return true;
+    //if (*out_distance < distance)
+        //return false;
+
+    //*out_distance = distance;
+    //return true;
+}
+
+b8 ray_plane_cast(ray3_hit *best_hit, ray3 ray, plane3 plane)
+{
+    ray3_hit hit = ray_plane_cast_ex(ray, plane);
+    if (hit.ok && hit.distance > -f32_epsilon)
+    {
+        if (!best_hit->ok || hit.distance < best_hit->distance)
+        {
+            *best_hit = hit;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 #include <xmmintrin.h>
 
-b8 ray_sphere_cast(f32 *out_distance, ray3 ray, sphere3 sphere)
+
+ray3_hit ray_sphere_cast_ex(ray3 ray, sphere3 sphere)
 {
     // | ray.origin + ray.direction * distance - sphere.center |² == sphere.radius²
 
@@ -561,7 +589,7 @@ b8 ray_sphere_cast(f32 *out_distance, ray3 ray, sphere3 sphere)
     f32 root_squared = minus_p_half * minus_p_half - q;
 
     if (root_squared < 0) // is negative
-        return false;
+        return sl(ray3_hit) { false };
 
     __m128 mx = _mm_set_ps1(root_squared);
     mx = _mm_sqrt_ps(mx);
@@ -570,122 +598,42 @@ b8 ray_sphere_cast(f32 *out_distance, ray3 ray, sphere3 sphere)
     f32 distance = minus_p_half - root;
     //f32 distance = minus_p_half - sqrtf(root_squared);
     if (distance < f32_epsilon) // is negative
-    {
         distance = minus_p_half + root;
 
-        if (distance < f32_epsilon) // is negative
-            return false;
-    }
+    return sl(ray3_hit) { true, distance };
 
-    if (*out_distance < distance)
-        return false;
-
-    *out_distance = distance;
+    //
+//
+    //    if (distance < f32_epsilon) // is negative
+    //        return false;
+    //}
+//
+    //if (*out_distance < distance)
+    //    return false;
+//
+    //*out_distance = distance;
 
 // debug
 #if 0
     printf("[ %f %f %f %f %f %f ] %f %f %f, %f %f %f %f %f %f %f 0 %f\n", ray.origin.x, ray.origin.y, ray.origin.z, ray.direction.x, ray.direction.y, ray.direction.z, a.x, a.y, a.z, a2, minus_ab, b2, minus_p_half, q, root_squared, distance, *out_distance);
 #endif
-
-    return true;
 }
 
-typedef struct
+b8 ray_sphere_cast(ray3_hit *best_hit, ray3 ray, sphere3 sphere)
 {
-    __m128 value;
-} wf32;
-
-typedef union
-{
-    struct
+    ray3_hit hit = ray_sphere_cast_ex(ray, sphere);
+    if (hit.ok && hit.distance > -f32_epsilon)
     {
-        wf32 x;
-        wf32 y;
-        wf32 z;
-    };
+        if (!best_hit->ok || hit.distance < best_hit->distance)
+            *best_hit = hit;
 
-    wf32 values[3];
-} wvec3;
+        return true;
+    }
 
-wf32 wf32_value(f32 value)
-{
-    wf32 result;
-    result.value = _mm_set_ps1(value);
-    return result;
+    return false;
 }
 
-wf32 wf32_add(wf32 a, wf32 b)
-{
-    a.value = _mm_add_ps(a.value, b.value);
-    return a;
-}
-
-wf32 wf32_sub(wf32 a, wf32 b)
-{
-    a.value = _mm_sub_ps(a.value, b.value);
-    return a;
-}
-
-wf32 wf32_mul(wf32 a, wf32 b)
-{
-    a.value = _mm_mul_ps(a.value, b.value);
-    return a;
-}
-
-wf32 wf32_div(wf32 a, wf32 b)
-{
-    a.value = _mm_div_ps(a.value, b.value);
-    return a;
-}
-
-wf32 wf32_select(wf32 a, wf32 b, wf32 mask)
-{
-    a.value = _mm_or_ps(_mm_andnot_ps(mask.value, a.value), _mm_and_ps(b.value, mask.value));
-    return a;
-}
-
-wvec3 wvec3_add(wvec3 a, wvec3 b)
-{
-    a.x = wf32_add(a.x, b.x);
-    a.y = wf32_add(a.y, b.y);
-    a.z = wf32_add(a.z, b.z);
-    return a;
-}
-
-wvec3 wvec3_sub(wvec3 a, wvec3 b)
-{
-    a.x = wf32_sub(a.x, b.x);
-    a.y = wf32_sub(a.y, b.y);
-    a.z = wf32_sub(a.z, b.z);
-    return a;
-}
-
-wvec3 wvec3_scale(wvec3 a, wf32 scale)
-{
-    a.x = wf32_mul(a.x, scale);
-    a.y = wf32_mul(a.y, scale);
-    a.z = wf32_mul(a.z, scale);
-    return a;
-}
-
-wf32 wvec3_dot(wvec3 a, wvec3 b)
-{
-    return wf32_add(wf32_add(wf32_mul(a.x, b.x), wf32_mul(a.y, b.y)), wf32_mul(a.z, b.z));
-}
-
-wvec3 wvec3_select(wvec3 a, wvec3 b, wf32 mask)
-{
-    a.x.value = _mm_or_ps(_mm_andnot_ps(mask.value, a.x.value), _mm_and_ps(b.x.value, mask.value));
-    a.y.value = _mm_or_ps(_mm_andnot_ps(mask.value, a.y.value), _mm_and_ps(b.y.value, mask.value));
-    a.z.value = _mm_or_ps(_mm_andnot_ps(mask.value, a.z.value), _mm_and_ps(b.z.value, mask.value));
-    return a;
-}
-
-typedef struct
-{
-    wvec3 origin;
-    wvec3 direction;
-} wray3;
+#if 0
 
 void multi_ray_sphere_cast(u32 ray_count, u32 *ray_hit_ids, f32 *ray_distances, wvec3 *ray_hit_normals, wray3 *rays, sphere3 sphere, u32 sphere_hit_id)
 {
@@ -916,16 +864,17 @@ void multi_ray_plane_cast(u32 ray_count, u32 *ray_hit_ids, f32 *ray_distances, w
     #endif
     }
 }
+#endif
 
 rgba8 vec3_to_rgba8(vec3 color)
 {
     rgba8 result;
-    color.x = color.x / (color.x + 1);
-    color.y = color.y / (color.y + 1);
-    color.z = color.z / (color.z + 1);
-    result.r = (u8) (color.x * 255);
-    result.g = (u8) (color.y * 255);
-    result.b = (u8) (color.z * 255);
+    // color.x = color.x / (color.x + 1);
+    // color.y = color.y / (color.y + 1);
+    // color.z = color.z / (color.z + 1);
+    result.r = (u8) f32_clamp(color.x * 255, 0, 255);
+    result.g = (u8) f32_clamp(color.y * 255, 0, 255);
+    result.b = (u8) f32_clamp(color.z * 255, 0, 255);
     result.a = 255;
 
     return result;

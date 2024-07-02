@@ -542,10 +542,13 @@ moui_print_va_signature;
 #define moui_printf_signature void moui_printf(moui_state *state, moui_simple_font *font, moui_s32 layer, moui_rgba_type color, moui_text_cursor *cursor, moui_cstring format, ...)
 moui_printf_signature;
 
-#define moui_create_texture_signature moui_texture moui_create_texture(moui_s32 width, moui_s32 height, moui_u8 *data, moui_b8 is_alpha_only, moui_b8 is_bilinear)
+#define moui_create_texture_signature moui_texture moui_create_texture(moui_state *state, moui_s32 width, moui_s32 height, moui_u8 *data, moui_b8 is_alpha_only, moui_b8 is_bilinear)
 moui_create_texture_signature;
 
-#define moui_update_texture_box_signature void moui_update_texture_box(moui_texture texture, moui_box2_type texture_box, moui_b8 is_alpha_only, moui_u8 *data)
+#define moui_destroy_texture_signature void moui_destroy_texture(moui_state *state, moui_texture *texture)
+moui_destroy_texture_signature;
+
+#define moui_update_texture_box_signature void moui_update_texture_box(moui_state *state, moui_texture texture, moui_box2_type texture_box, moui_b8 is_alpha_only, moui_u8 *data)
 moui_update_texture_box_signature;
 
 // actual rendering on the current render target
@@ -636,10 +639,10 @@ moui_gl_load_font_signature;
 
 #if defined(mop_h) && defined(moma_h)
 
-#define moui_load_font_file_signature void moui_load_font_file(moui_simple_font *font, mop_platform *platform, moma_arena *tmemory, moui_string path, moui_s32 texture_width, moui_s32 texture_height, moui_s32 height, moui_u32 first_character, moui_u32 character_count)
+#define moui_load_font_file_signature void moui_load_font_file(moui_simple_font *font, moui_state *state, mop_platform *platform, moma_arena *tmemory, moui_string path, moui_s32 texture_width, moui_s32 texture_height, moui_s32 height, moui_u32 first_character, moui_u32 character_count)
 moui_load_font_file_signature;
 
-#define moui_load_outlined_font_file_signature void moui_load_outlined_font_file(moui_simple_font *font, mop_platform *platform, moma_arena *tmemory, moui_string path, moui_s32 texture_width, moui_s32 texture_height, moui_s32 height, moui_u32 first_character, moui_u32 character_count, moui_s32 thickness, moui_rgba_type inner_color, moui_rgba_type outline_color)
+#define moui_load_outlined_font_file_signature void moui_load_outlined_font_file(moui_simple_font *font, moui_state *state, mop_platform *platform, moma_arena *tmemory, moui_string path, moui_s32 texture_width, moui_s32 texture_height, moui_s32 height, moui_u32 first_character, moui_u32 character_count, moui_s32 thickness, moui_rgba_type inner_color, moui_rgba_type outline_color)
 moui_load_outlined_font_file_signature;
 
 #endif
@@ -1412,6 +1415,15 @@ moui_create_texture_signature
     return texture;
 }
 
+moui_destroy_texture_signature
+{
+    moui_assert(texture->handle);
+    moui_u32 texture_handle = (moui_u32) (moui_usize) texture->handle;
+    glDeleteTextures(1, &texture_handle);
+
+    *texture = moui_sl(moui_texture) {0};
+}
+
 moui_update_texture_box_signature
 {
     moui_u32 texture_handle = (moui_u32) (moui_usize) texture.handle;
@@ -1515,7 +1527,7 @@ moui_default_init_signature
 
     {
         moui_u8 white = 255;
-        default_state->base.renderer.white_texture = moui_create_texture(1, 1, &white, moui_true, moui_false);
+        default_state->base.renderer.white_texture = moui_create_texture(&default_state->base, 1, 1, &white, moui_true, moui_false);
     }
 
     {
@@ -1527,7 +1539,7 @@ moui_default_init_signature
               0, 0, 0, 0,
               0, 0, 0, 0,
         };
-        default_state->base.renderer.line_texture = moui_create_texture(1, 4, line, moui_true, moui_true);
+        default_state->base.renderer.line_texture = moui_create_texture(&default_state->base, 1, 4, line, moui_true, moui_true);
     }
 }
 
@@ -2467,7 +2479,7 @@ moui_rounded_cutout_box_signature
     }
 }
 
-moui_box2_type moui_atlas_place_texture_box(moui_atlas *atlas, moui_s32 width, moui_s32 height, moui_u8_array buffer)
+moui_box2_type moui_atlas_place_texture_box(moui_state *state, moui_atlas *atlas, moui_s32 width, moui_s32 height, moui_u8_array buffer)
 {
     moui_s32 row_width = (width + 3) & ~3;
     moui_assert(row_width * height <= buffer.count);
@@ -2489,7 +2501,7 @@ moui_box2_type moui_atlas_place_texture_box(moui_atlas *atlas, moui_s32 width, m
     texture_box.min.y = atlas->row_y;
     texture_box.max.x = texture_box.min.x + width;
     texture_box.max.y = texture_box.min.y + height;
-    moui_update_texture_box(atlas->texture, texture_box, moui_true, buffer.base);
+    moui_update_texture_box(state, atlas->texture, texture_box, moui_true, buffer.base);
 
     atlas->row_x += width + 1;
 
@@ -2506,7 +2518,7 @@ void moui_update_atlas(moui_state *state, moui_u8_array buffer)
         atlas->texture.width  = 1024;
         atlas->texture.height = 1024;
 
-        atlas->texture = moui_create_texture(1024, 1024, moui_null, moui_true, moui_false);
+        atlas->texture = moui_create_texture(state, 1024, 1024, moui_null, moui_true, moui_false);
 
         atlas->row_x = 0;
         atlas->row_y = 0;
@@ -2539,7 +2551,7 @@ void moui_update_atlas(moui_state *state, moui_u8_array buffer)
             // center is white
             buffer.base[1 * row_width + 1] = 255;
 
-            item->texture_box = moui_atlas_place_texture_box(atlas, 3, 3, buffer);
+            item->texture_box = moui_atlas_place_texture_box(state, atlas, 3, 3, buffer);
         } break;
 
         case moui_default_atlas_item_type_rounded_box:
@@ -2576,7 +2588,7 @@ void moui_update_atlas(moui_state *state, moui_u8_array buffer)
             #endif
             }
 
-            item->texture_box = moui_atlas_place_texture_box(atlas, size, size, buffer);
+            item->texture_box = moui_atlas_place_texture_box(state, atlas, size, size, buffer);
         } break;
 
         default:
@@ -3014,7 +3026,7 @@ moui_load_font_file_signature
         font->line_spacing   = font->line_height + ceilf(line_gap * scale);
     }
 
-    font->texture = moui_create_texture(font->texture.width, font->texture.height, texture_buffer, moui_true, moui_false);
+    font->texture = moui_create_texture(state, font->texture.width, font->texture.height, texture_buffer, moui_true, moui_false);
 
     moma_reset(tmemory, read_file_buffer.base);
 }
@@ -3138,7 +3150,7 @@ moui_load_outlined_font_file_signature
     //font->line_height  = font->bottom_to_line + font->line_to_top;
     font->line_spacing = font->line_height + line_gap * scale;
 
-    font->texture = moui_create_texture(font->texture.width, font->texture.height, (moui_u8 *) texture_buffer, moui_false, moui_false);
+    font->texture = moui_create_texture(state, font->texture.width, font->texture.height, (moui_u8 *) texture_buffer, moui_false, moui_false);
 
     moma_reset(tmemory, read_file_buffer.base);
 }
