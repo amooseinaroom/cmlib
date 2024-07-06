@@ -201,12 +201,12 @@ vec3 vec3_normalize_or_zero(vec3 vector)
 
 vec3 vec3_min(vec3 a, vec3 b)
 {
-    return { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z) };
+    return sl(vec3) { min(a.x, b.x), min(a.y, b.y), min(a.z, b.z) };
 }
 
 vec3 vec3_max(vec3 a, vec3 b)
 {
-    return { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z) };
+    return sl(vec3) { max(a.x, b.x), max(a.y, b.y), max(a.z, b.z) };
 }
 
 vec3 vec3_lerp(vec3 from, vec3 to, vec3 ratio)

@@ -799,7 +799,7 @@ mop_init_signature
 
     platform->win32.instance = instance;
 
-    platform->win32.xinput_library = {0};
+    platform->win32.xinput_library = mop_sl(mop_library) {0};
     if (mop_load_library(platform, &platform->win32.xinput_library, mop_s("Xinput1_4")) ||
         mop_load_library(platform, &platform->win32.xinput_library, mop_s("Xinput1_3")) ||
         mop_load_library(platform, &platform->win32.xinput_library, mop_s("Xinput9_1_0")))
