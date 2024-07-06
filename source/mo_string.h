@@ -148,6 +148,9 @@ mos_skip_name_signature;
 #define mos_skip_default_name_signature mos_string mos_skip_default_name(mos_string *iterator)
 mos_skip_default_name_signature;
 
+#define mos_peek_signature mos_b8 mos_peek(mos_string iterator, mos_string pattern)
+mos_peek_signature;
+
 #define mos_try_skip_signature mos_b8 mos_try_skip(mos_string *iterator, mos_string pattern)
 mos_try_skip_signature;
 
@@ -348,20 +351,31 @@ mos_skip_default_name_signature
     return mos_skip_name(iterator, mos_default_name_blacklist);
 }
 
-mos_try_skip_signature
+mos_peek_signature
 {
-    if (iterator->count < pattern.count)
+    if (iterator.count < pattern.count)
         return mos_false;
 
     for (mos_usize i = 0; i < pattern.count; i++)
     {
-        if (iterator->base[i] != pattern.base[i])
+        if (iterator.base[i] != pattern.base[i])
             return mos_false;
     }
 
-    mos_advance(iterator, pattern.count);
-
     return mos_true;
+}
+
+mos_try_skip_signature
+{
+    if (mos_peek(*iterator, pattern))
+    {
+        mos_advance(iterator, pattern.count);
+        return mos_true;
+    }
+    else
+    {
+        return mos_false;
+    }
 }
 
 mos_skip_signature

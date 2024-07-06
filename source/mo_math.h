@@ -183,7 +183,6 @@ vec3 vec3_normalize(vec3 vector)
     return result;
 }
 
-
 vec3 vec3_normalize_safe(vec3 vector, vec3 fallback)
 {
     f32 length_squared = vec3_length_squared(vector);
@@ -197,7 +196,6 @@ vec3 vec3_normalize_or_zero(vec3 vector)
 {
     return vec3_normalize_safe(vector, vec3_zero);
 }
-
 
 vec3 vec3_min(vec3 a, vec3 b)
 {
