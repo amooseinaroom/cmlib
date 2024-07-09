@@ -435,6 +435,13 @@ typedef mop_hot_update_type((*mop_hot_update_function));
 
 #define mop_hot_reload_signature mop_b8 mop_hot_reload(mop_platform *platform, mop_hot_reload_state *state, mop_string name)
 
+#define mop_read_embedded_file_signature mop_u8_array mop_read_embedded_file(mop_platform *platform, mop_string name)
+mop_read_embedded_file_signature;
+
+// TODO: better name
+#define mop_dubugger_is_present_signature mop_b8 mop_dubugger_is_present()
+mop_dubugger_is_present_signature;
+
 #define mop_debug_break_signature void mop_debug_break()
 mop_debug_break_signature;
 
@@ -1958,6 +1965,32 @@ mop_hot_reload_signature
     state->hot_update = (mop_hot_update_function) mop_load_symbol(platform, &state->library, mop_hot_update_name);
 
     return mop_true;
+}
+
+mop_read_embedded_file_signature
+{
+    mop_u8 cname[MAX_PATH];
+    mop_win32_to_cpath(cname, name);
+
+    HRSRC resource = FindResourceA(mop_null, cname, RT_RCDATA);
+    mop_require(resource);
+
+    HGLOBAL data = LoadResource(mop_null, resource);
+    mop_require(data);
+
+    mop_u8_array result;
+    result.base = LockResource(data);
+    mop_require(result.base);
+
+    result.count = SizeofResource(mop_null, resource);
+    mop_require(result.count);
+
+    return result;
+}
+
+mop_dubugger_is_present_signature
+{
+    return IsDebuggerPresent();
 }
 
 mop_debug_break_signature
