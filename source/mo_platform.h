@@ -418,7 +418,7 @@ mop_atomic_sub_s64_signature;
 
 #define mop_atomic_compare_exchange_s32_signature mop_s64 mop_atomic_compare_exchange_s32(mop_platform *platform, mop_s32 *value, mop_s32 expected_value, mop_s32 new_value)
 
-#define mop_execute_command_siganture mop_execute_command_result mop_execute_command(mop_string output_buffer, mop_string command_line)
+#define mop_execute_command_siganture mop_execute_command_result mop_execute_command(mop_string output_buffer, mop_string command_line, mop_string working_directory)
 mop_execute_command_siganture;
 
 #define mop_load_library_signature mop_b8 mop_load_library(mop_platform *platform, mop_library *library, mop_string name)
@@ -1830,14 +1830,22 @@ mop_execute_command_siganture
     mop_require(SetHandleInformation(write_pipe, HANDLE_FLAG_INHERIT, 0));
 
     mop_u8 command_line_buffer[1024];
-    mop_require(snprintf((mop_cstring) command_line_buffer,mop_carray_count(command_line_buffer), "%.*s", mop_fs(command_line)) < mop_carray_count(command_line_buffer));
+    mop_assert(snprintf((mop_cstring) command_line_buffer, mop_carray_count(command_line_buffer), "%.*s", mop_fs(command_line)) < mop_carray_count(command_line_buffer));
+
+    mop_u8 working_directory_buffer[512];
+    mop_cstring cworking_directory = mop_null;
+    if (working_directory.count)
+    {
+        mop_assert(snprintf((mop_cstring) working_directory_buffer, mop_carray_count(working_directory_buffer), "%.*s", mop_fs(working_directory)) < mop_carray_count(working_directory_buffer));
+        cworking_directory = (mop_cstring) working_directory_buffer;
+    }
 
     STARTUPINFOA start_info = {0};
     start_info.cb = sizeof(start_info);
     start_info.hStdError = write_pipe;
     start_info.hStdOutput = write_pipe;
     PROCESS_INFORMATION process_info = {0};
-    mop_b8 ok = CreateProcessA(mop_null, (mop_cstring) command_line_buffer, mop_null, mop_null, mop_true, 0, mop_null, mop_null, &start_info, &process_info);
+    mop_b8 ok = CreateProcessA(mop_null, (mop_cstring) command_line_buffer, mop_null, mop_null, mop_true, 0, mop_null, cworking_directory, &start_info, &process_info);
 
     mop_string output = output_buffer;
     mop_s32 exit_code = 0;
