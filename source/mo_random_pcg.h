@@ -37,6 +37,19 @@ u32 random_index(random_pcg *random, u32 count)
     return index;
 }
 
+u32 random_index_min_max(random_pcg *random, u32 min, u32 max)
+{
+    assert(min <= max);
+
+    if (min == max)
+        return min;
+
+    u32 index = random_u32(random);
+    index = (index % (max - min)) + min;
+
+    return index;
+}
+
 f32 random_f32_zero_to_one(random_pcg *random)
 {
     f32 result = (f32) random_u32(random) / 0xFFFFFFFF;

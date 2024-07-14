@@ -1972,14 +1972,14 @@ mop_read_embedded_file_signature
     mop_u8 cname[MAX_PATH];
     mop_win32_to_cpath(cname, name);
 
-    HRSRC resource = FindResourceA(mop_null, cname, RT_RCDATA);
+    HRSRC resource = FindResourceA(mop_null, (char *) cname, RT_RCDATA);
     mop_require(resource);
 
     HGLOBAL data = LoadResource(mop_null, resource);
     mop_require(data);
 
     mop_u8_array result;
-    result.base = LockResource(data);
+    result.base = (mop_u8 *) LockResource(data);
     mop_require(result.base);
 
     result.count = SizeofResource(mop_null, resource);

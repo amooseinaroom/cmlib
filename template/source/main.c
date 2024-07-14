@@ -3,6 +3,8 @@
 #define mop_debug
 #endif
 
+#define use_letterbox
+
 #include "mo_basic.h"
 
 #include "mo_platform.h"
@@ -54,7 +56,10 @@ typedef struct
 
     moui_default_state ui;
     moui_simple_font   font;
+
+#ifdef use_letterbox
     box2               ui_letterbox;
+#endif
 
     random_pcg random;
 
@@ -130,8 +135,11 @@ int main(int argument_count, char *arguments[])
 
         moui_default_render_begin(&program->ui, &ui_window);
 
-        // moui_default_render_prepare_execute_viewport(&program->ui, program->ui_letterbox);
+    #ifdef use_letterbox
+        moui_default_render_prepare_execute_viewport(&program->ui, program->ui_letterbox);
+    #else
         moui_default_render_prepare_execute(&program->ui);
+    #endif
 
         moui_execute(&program->ui.base);
 
@@ -148,6 +156,7 @@ mop_hot_update_signature
 {
     program_state *program = (program_state *) data.base;
     moui_state *ui = &program->ui.base;
+    moma_arena *tmemory = &program->memory;
     f32 delta_seconds = platform->delta_seconds;
 
     #if defined mop_debug
@@ -170,6 +179,7 @@ mop_hot_update_signature
     const f32 target_width_over_height = 16.0f / 9;
     f32 width_over_height = ui_size.x / ui_size.y;
 
+#ifdef use_letterbox
     box2 letterbox;
     if (width_over_height > target_width_over_height)
     {
@@ -195,7 +205,7 @@ mop_hot_update_signature
     program->ui_letterbox = letterbox;
 
     mouse_position = vec2_sub(mouse_position, letterbox.min);
-
+#endif
 
     const f32 target_height = 1080;
     f32 ui_scale = ui_size.y / target_height;
@@ -209,7 +219,7 @@ mop_hot_update_signature
             s32 thickness = ceilf(4 * ui_scale);
 
             moui_destroy_font(&program->font);
-            moui_load_outlined_font_file(&program->font, platform, &program->memory, s("C:/windows/fonts/consola.ttf"), 1024, 1024, pixel_height, ' ', 96, thickness, moui_rgba_white, moui_rgba_black);
+            moui_load_outlined_font_file(&program->font, ui, platform, tmemory, s("C:/windows/fonts/consola.ttf"), 1024, 1024, pixel_height, ' ', 96, thickness, moui_rgba_white, moui_rgba_black);
         }
     }
 
@@ -217,6 +227,9 @@ mop_hot_update_signature
 
     moui_frame(ui, ui_size, mouse_position, platform->keys[mop_key_mouse_left].is_active << 0);
 
-    moui_text_cursor print_cursor = moui_text_cursor_at_top(font, sl(moui_vec2) { 0, ui_size.y });
-    moui_printf(ui, font, 0, sl(moui_rgba) { 1.0f, 1.0f, 1.0f, 1.0f }, &print_cursor, "fps: %f\n", 1.0f / platform->delta_seconds);
+    box2 ui_box = { 0, 0, ui_size.x, ui_size.y };
+    moui_box(ui, 0, moui_make_quad_colors(sl(rgba) { 0, 0.5f, 0.5f, 1 }), ui_box);
+
+    moui_text_cursor print_cursor = moui_text_cursor_at_top(font, sl(vec2) { 0, ui_size.y });
+    moui_printf(ui, font, 0, sl(rgba) { 1.0f, 1.0f, 1.0f, 1.0f }, &print_cursor, "fps: %f\n", 1.0f / platform->delta_seconds);
 }
