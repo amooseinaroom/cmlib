@@ -57,8 +57,10 @@ typedef char * cstring;
 #define null 0
 
 #if !defined __cplusplus
-const b8 false = 0;
-const b8 true  = 1;
+// const b8 false = 0;
+// const b8 true  = 1;
+#define false 0
+#define true  1
 #endif
 
 #define carray_count(static_array) (sizeof(static_array) / sizeof(*(static_array)))
