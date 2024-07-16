@@ -66,10 +66,18 @@ typedef char * cstring;
 #define carray_count(static_array) (sizeof(static_array) / sizeof(*(static_array)))
 
 #define array_type(name, type) \
-typedef struct \
+typedef struct name \
 { \
     type  *base; \
-    usize count; \
+    usize  count; \
+} name
+
+#define buffer_type(name, type) \
+typedef struct name \
+{ \
+    type  *base; \
+    usize  count; \
+    usize  used_count; \
 } name
 
 array_type(u8_array, u8);
@@ -218,6 +226,12 @@ copy_signature;
 //     sc("banana"),
 //     sc("grap"),
 // };
+
+#ifdef mo_debug
+#define mo_breakpoint(condition) do { if (condition) mop_debug_break(); } while (false)
+#else
+#define mo_breakpoint(condition) !remove_this_break_point!
+#endif
 
 #ifdef __cplusplus
 }
