@@ -490,9 +490,9 @@ mos_parse_u64_ex_signature
 
                 if (digit >= base - 10)
                     break;
-
-                digit += 10;
             }
+
+            digit += 10;
         }
 
         mos_u64 next_value = value * base + digit;
@@ -800,6 +800,7 @@ mos_write_va_signature
 {
     mos_s32 count = vsnprintf((char *) buffer->base + buffer->used_count, buffer->total_count - buffer->used_count, format, arguments);
     mos_assert(count >= 0);
+    mos_assert(buffer->used_count + count <= buffer->total_count);
     mos_string result = { buffer->base + buffer->used_count, (mos_usize) count };
     buffer->used_count += count;
 
