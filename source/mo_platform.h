@@ -1852,7 +1852,7 @@ mop_execute_command_siganture
     if (ok)
     {
         output.count = 0;
-        while(WaitForSingleObject(process_info.hProcess, 0) != WAIT_OBJECT_0)
+        while (WaitForSingleObject(process_info.hProcess, INFINITE) != WAIT_OBJECT_0)
         {
             mop_u8 buffer[1024];
 
