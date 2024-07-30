@@ -106,8 +106,6 @@ struct mop_library;
 typedef struct mop_hot_reload_state mop_hot_reload_state;
 struct mop_hot_reload_state;
 
-#define mop_path_max_count 512
-
 typedef struct
 {
     mop_s32 x;
@@ -133,13 +131,30 @@ typedef struct
     mop_b8       ok;
 } mop_read_file_result;
 
+
+#ifndef mop_max_path_string_count
+
+#if defined(_WIN32) || defined(WIN32)
+#include <windows.h>
+#define mop_max_path_string_count MAX_PATH
+#else
+#error unsupported platform
+#endif
+
+#endif
+
 typedef struct
 {
-    mop_u8     buffer[mop_path_max_count];
-    mop_string filepath;
-    mop_b8     is_directory;
-    mop_b8     is_search_directory;
-    mop_b8     is_parent_directory;
+    mop_u8  base[mop_max_path_string_count]; // 0 terminated
+    mop_u32 count;
+} mop_path_string;
+
+typedef struct
+{
+    mop_path_string path;
+    mop_b8          is_directory;
+    mop_b8          is_search_directory;
+    mop_b8          is_parent_directory;
 } mop_file_search_result;
 
 typedef struct
@@ -182,6 +197,7 @@ typedef union
 
     mop_u8 value;
 } mop_key_state;
+
 
 #ifndef mop_vec2_type
 #define mop_vec2_type mop_vec2
@@ -367,6 +383,12 @@ mop_write_file_signature;
 
 #define mop_copy_file_signature mop_b8 mop_copy_file(mop_platform *platform, mop_string to_path, mop_string from_path, mop_b8 override)
 mop_copy_file_signature;
+
+#define mop_path_get_string_signature mop_string mop_path_get_string(mop_path_string *path)
+mop_path_get_string_signature;
+
+#define mop_path_set_string_signature void mop_path_set_string(mop_path_string *path, mop_string text)
+mop_path_set_string_signature;
 
 #define mop_create_directory_siganture mop_b8 mop_create_directory(mop_platform *platform, mop_string path)
 mop_create_directory_siganture;
@@ -607,11 +629,8 @@ struct mop_platform
     mop_key_state keys[256];
     mop_gamepad gamepads[mop_gamepad_count];
 
-    mop_u8     program_directory_buffer[mop_path_max_count];
-    mop_string program_directory;
-
-    mop_u8     working_directory_buffer[mop_path_max_count];
-    mop_string working_directory;
+    mop_path_string program_directory;
+    mop_path_string working_directory;
 
     mop_win32_close_window_requests close_window_requests;
 
@@ -658,10 +677,10 @@ struct mop_hot_reload_state
 
 struct mop_file_search_iterator
 {
+    mop_path_string directory_path;
+
     struct
     {
-        mop_u8           cdirectory_path[MAX_PATH];
-        mop_u32          cdirectory_path_count;
         WIN32_FIND_DATAA find_data;
         HANDLE           handle;
     } win32;
@@ -1020,59 +1039,54 @@ mop_get_command_line_arguments_signature
 
 mop_get_working_directory_signature
 {
-    if (platform->working_directory.base)
-        return platform->working_directory;
+    if (platform->working_directory.count)
+        return mop_path_get_string(&platform->working_directory);
 
-    platform->working_directory = mop_sl(mop_string) { platform->working_directory_buffer, 0 };
-    mop_string *working_directory = &platform->working_directory;
+    platform->working_directory.count = GetCurrentDirectoryA(mop_carray_count(platform->working_directory.base), (char *) platform->working_directory.base);
+    mop_require(platform->working_directory.count);
+    mop_assert(platform->working_directory.count < mop_carray_count(platform->working_directory.base));
 
-    mop_u32 count = GetCurrentDirectoryA(mop_carray_count(platform->working_directory_buffer), (char *) platform->working_directory_buffer);
-    mop_require(count);
-    mop_assert(count <= mop_carray_count(platform->working_directory_buffer));
-    working_directory->count = count;
-
-    for (mop_u32 i = 0; i < working_directory->count; i++)
+    for (mop_u32 i = 0; i < platform->working_directory.count; i++)
     {
-        if (working_directory->base[i] == '\\')
-            working_directory->base[i] = '/';
+        if (platform->working_directory.base[i] == '\\')
+            platform->working_directory.base[i] = '/';
     }
 
-    return platform->working_directory;
+    return mop_path_get_string(&platform->working_directory);
 }
 
 mop_get_program_directory_signature
 {
     if (platform->program_directory.base)
-        return platform->program_directory;
+        return mop_path_get_string(&platform->program_directory);
 
-    platform->program_directory = mop_sl(mop_string) { platform->program_directory_buffer, 0 };
-    mop_string *program_directory = &platform->program_directory;
-
-    program_directory->count = GetModuleFileNameA(mop_null, (char *) program_directory->base, mop_carray_count(platform->program_directory_buffer));
-    mop_require(program_directory->count);
+    platform->program_directory.count = GetModuleFileNameA(mop_null, (char *) platform->program_directory.base, mop_carray_count(platform->program_directory.base));
+    mop_require(platform->program_directory.count);
 
     // error could be ERROR_INSUFFICIENT_BUFFER, since the function truncates the path if the buffer is too small
-    if (program_directory->count == mop_carray_count(platform->program_directory_buffer))
+    if (platform->program_directory.count == mop_carray_count(platform->program_directory.base))
     {
         mop_s32 error = GetLastError();
-        mop_require(!error)
+        mop_require(!error);
     }
+
+    mop_assert(platform->program_directory.count < mop_carray_count(platform->program_directory.base));
 
     {
         mop_usize count = 0; // count without name
-        for (mop_u32 i = 0; i < program_directory->count; i++)
+        for (mop_u32 i = 0; i < platform->program_directory.count; i++)
         {
-            if (program_directory->base[i] == '\\')
+            if (platform->program_directory.base[i] == '\\')
             {
-                program_directory->base[i] = '/';
+                platform->program_directory.base[i] = '/';
                 count = i;
             }
         }
 
-        program_directory->count = count;
+        platform->program_directory.count = count;
     }
 
-    return platform->program_directory;
+    return mop_path_get_string(&platform->program_directory);
 }
 
 mop_f32 mop_win32_get_xinput_stick_axis(mop_s32 raw_value, mop_s16 threshold)
@@ -1419,6 +1433,9 @@ mop_get_local_date_and_time_signature
     return result;
 }
 
+// TEMP
+
+#if 0
 void mop_win32_to_cpath(mop_u8 cpath[MAX_PATH], mop_string path)
 {
     mop_require(path.count < MAX_PATH);
@@ -1435,14 +1452,15 @@ void mop_win32_to_cpath(mop_u8 cpath[MAX_PATH], mop_string path)
     if (path.count < MAX_PATH)
         cpath[path.count] = 0;
 }
+#endif
 
 mop_get_file_byte_count_signature
 {
-    mop_u8 cpath[MAX_PATH];
-    mop_win32_to_cpath(cpath, path);
+    mop_path_string cpath;
+    mop_path_set_string(&cpath, path);
 
     WIN32_FILE_ATTRIBUTE_DATA data;
-    if (!GetFileAttributesExA((mop_cstring) cpath, GetFileExInfoStandard, &data))
+    if (!GetFileAttributesExA((mop_cstring) cpath.base, GetFileExInfoStandard, &data))
     {
         mop_s32 error = GetLastError();
         mop_require((error == ERROR_FILE_NOT_FOUND) || (error == ERROR_PATH_NOT_FOUND) || (error == ERROR_SHARING_VIOLATION));
@@ -1456,11 +1474,11 @@ mop_get_file_byte_count_signature
 
 mop_get_file_write_timestamp_signature
 {
-    mop_u8 cpath[MAX_PATH];
-    mop_win32_to_cpath(cpath, path);
+    mop_path_string cpath;
+    mop_path_set_string(&cpath, path);
 
     WIN32_FILE_ATTRIBUTE_DATA data;
-    if (!GetFileAttributesExA((mop_cstring) cpath, GetFileExInfoStandard, &data))
+    if (!GetFileAttributesExA((mop_cstring) cpath.base, GetFileExInfoStandard, &data))
     {
         mop_s32 error = GetLastError();
         mop_require(error == ERROR_FILE_NOT_FOUND);
@@ -1481,19 +1499,19 @@ mop_path_is_directory_signature
     if (!path.count)
         return mop_true;
 
-    mop_u8 cpath[MAX_PATH];
-    mop_win32_to_cpath(cpath, path);
+    mop_path_string cpath;
+    mop_path_set_string(&cpath, path);
 
-    mop_u32 file_attributes = GetFileAttributes((mop_cstring) cpath);
+    mop_u32 file_attributes = GetFileAttributes((mop_cstring) cpath.base);
     return (file_attributes != INVALID_FILE_ATTRIBUTES && (file_attributes & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 mop_read_file_signature
 {
-    mop_u8 cpath[MAX_PATH];
-    mop_win32_to_cpath(cpath, path);
+    mop_path_string cpath;
+    mop_path_set_string(&cpath, path);
 
-    HANDLE handle = CreateFile((mop_cstring) cpath, GENERIC_READ, FILE_SHARE_READ, mop_null, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, mop_null);
+    HANDLE handle = CreateFile((mop_cstring) cpath.base, GENERIC_READ, FILE_SHARE_READ, mop_null, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, mop_null);
     if (handle == INVALID_HANDLE_VALUE)
     {
         mop_s32 error = GetLastError();
@@ -1532,10 +1550,10 @@ mop_read_file_signature
 
 mop_write_file_signature
 {
-    mop_u8 cpath[MAX_PATH];
-    mop_win32_to_cpath(cpath, path);
+    mop_path_string cpath;
+    mop_path_set_string(&cpath, path);
 
-    HANDLE handle = CreateFile((mop_cstring) cpath, GENERIC_WRITE, 0, mop_null, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, mop_null);
+    HANDLE handle = CreateFile((mop_cstring) cpath.base, GENERIC_WRITE, 0, mop_null, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, mop_null);
     if (handle == INVALID_HANDLE_VALUE)
     {
         mop_s32 error = GetLastError();
@@ -1565,22 +1583,35 @@ mop_write_file_signature
 
 mop_copy_file_signature
 {
-    mop_u8 to_cpath[MAX_PATH];
-    mop_win32_to_cpath(to_cpath, to_path);
+    mop_path_string to_cpath;
+    mop_path_set_string(&to_cpath, to_path);
 
-    mop_u8 from_cpath[MAX_PATH];
-    mop_win32_to_cpath(from_cpath, from_path);
+    mop_path_string from_cpath;
+    mop_path_set_string(&from_cpath, from_path);
 
-    mop_b8 ok = CopyFileA((mop_cstring) from_cpath, (mop_cstring) to_cpath, (mop_s32) !override);
+    mop_b8 ok = CopyFileA((mop_cstring) from_cpath.base, (mop_cstring) to_cpath.base, (mop_s32) !override);
     return ok;
+}
+
+mop_path_get_string_signature
+{
+    return sl(mop_string) { path->base, path->count };
+}
+
+mop_path_set_string_signature
+{
+    mop_assert(text.count < mop_carray_count(path->base));
+    memcpy(path->base, text.base, text.count);
+    path->base[text.count] = '\0';
+    path->count = text.count;
 }
 
 mop_create_directory_siganture
 {
-    mop_u8 cpath[MAX_PATH];
-    mop_win32_to_cpath(cpath, path);
+    mop_path_string cpath;
+    mop_path_set_string(&cpath, path);
 
-    mop_b8 ok = CreateDirectory((char *) cpath, mop_null);
+    mop_b8 ok = CreateDirectory((mop_cstring) cpath.base, mop_null);
     if (!ok)
     {
         if (GetLastError() == ERROR_ALREADY_EXISTS)
@@ -1616,9 +1647,9 @@ mop_normalize_path_signature
 mop_file_search_init_signature
 {
     mop_file_search_iterator file_iterator = {0};
-    mop_win32_to_cpath(file_iterator.win32.cdirectory_path, directory_path);
+    mop_path_set_string(&file_iterator.directory_path, directory_path);
 
-    mop_string path = mop_sl(mop_string) { file_iterator.win32.cdirectory_path, directory_path.count };
+    mop_string path = mop_path_get_string(&file_iterator.directory_path);
     mop_normalize_path(&path);
 
     if (!mop_path_is_directory(platform, path))
@@ -1626,32 +1657,31 @@ mop_file_search_init_signature
 
     if (!path.count)
     {
-        file_iterator.win32.cdirectory_path[0] = '.';
-        file_iterator.win32.cdirectory_path[1] = '\\';
-        file_iterator.win32.cdirectory_path[2] = '*';
-        file_iterator.win32.cdirectory_path[3] = 0;
-        file_iterator.win32.cdirectory_path_count = 0;
+        path.base[0] = '.';
+        path.base[1] = '\\';
+        path.base[2] = '*';
+        path.base[3] = 0;
     }
     else
     {
-        mop_assert(path.count + 1 < mop_carray_count(file_iterator.win32.cdirectory_path));
-        file_iterator.win32.cdirectory_path[path.count] = '\\';
-        file_iterator.win32.cdirectory_path[path.count + 1] = '*';
+        mop_assert(path.count + 1 < mop_carray_count(file_iterator.directory_path.base));
+        path.base[path.count] = '\\';
+        path.base[path.count + 1] = '*';
 
-        if (path.count + 2 < mop_carray_count(file_iterator.win32.cdirectory_path))
-           file_iterator.win32.cdirectory_path[path.count + 2] = 0;
+        if (path.count + 2 < mop_carray_count(file_iterator.directory_path.base))
+           path.base[path.count + 2] = 0;
 
-        file_iterator.win32.cdirectory_path_count = path.count + 1; // including '/'
+        file_iterator.directory_path.count = path.count + 1; // including '/'
     }
 
-    file_iterator.win32.handle = FindFirstFileA((mop_cstring) file_iterator.win32.cdirectory_path, &file_iterator.win32.find_data);
+    file_iterator.win32.handle = FindFirstFileA((mop_cstring) file_iterator.directory_path.base, &file_iterator.win32.find_data);
 
     if (!path.count)
-        file_iterator.win32.cdirectory_path[0] = 0;
-    else if (path.count < mop_carray_count(file_iterator.win32.cdirectory_path))
+        path.base[0] = 0;
+    else if (path.count < mop_carray_count(file_iterator.directory_path.base))
     {
-        file_iterator.win32.cdirectory_path[path.count] = '/';
-        file_iterator.win32.cdirectory_path[path.count + 1] = 0;
+        path.base[path.count] = '/';
+        path.base[path.count + 1] = 0;
     }
 
     if (file_iterator.win32.handle == INVALID_HANDLE_VALUE)
@@ -1667,48 +1697,48 @@ mop_file_search_advance_signature
 
     *result = mop_sl(mop_file_search_result) {0};
 
-    result->filepath = mop_sl(mop_string) { result->buffer };
+    mop_string path = mop_path_get_string(&result->path);
     result->is_directory = (file_iterator->win32.find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
-    mop_assert(file_iterator->win32.cdirectory_path_count <= mop_carray_count(result->buffer));
-    result->filepath.count = file_iterator->win32.cdirectory_path_count;
+    mop_assert(file_iterator->directory_path.count <= mop_carray_count(result->path.base));
+    path.count = file_iterator->directory_path.count;
 
-    for (mop_u32 i = 0; i < file_iterator->win32.cdirectory_path_count; i++)
-        result->buffer[i] = file_iterator->win32.cdirectory_path[i];
+    for (mop_u32 i = 0; i < file_iterator->directory_path.count; i++)
+        path.base[i] = file_iterator->directory_path.base[i];
 
     if (file_iterator->win32.find_data.cFileName[0] == '.' && file_iterator->win32.find_data.cFileName[1] == '\0')
     {
         // remove / from path
-        if (result->filepath.count)
-            result->filepath.count--;
+        if (path.count)
+            path.count--;
 
         result->is_search_directory = true;
     }
     else if (file_iterator->win32.find_data.cFileName[0] == '.' && file_iterator->win32.find_data.cFileName[1] == '.' && file_iterator->win32.find_data.cFileName[2] == 0)
     {
-        if (!file_iterator->win32.cdirectory_path_count)
+        if (!file_iterator->directory_path.count)
         {
-            result->filepath.count = 2;
-            result->filepath.base[0] = '.';
-            result->filepath.base[1] = '.';
+            path.count = 2;
+            path.base[0] = '.';
+            path.base[1] = '.';
         }
         else
         {
             mop_b8 found_slash = mop_false;
-            mop_assert(result->filepath.count >= 2);
+            mop_assert(path.count >= 2);
 
-            for (mop_u32 i = 0; i < result->filepath.count; i++)
+            for (mop_u32 i = 0; i < path.count; i++)
             {
-                if (result->filepath.base[result->filepath.count - 2 - i] == '/')
+                if (path.base[path.count - 2 - i] == '/')
                 {
-                    result->filepath.count = result->filepath.count - 2 - i;
+                    path.count = path.count - 2 - i;
                     found_slash = mop_true;
                     break;
                 }
             }
 
             if (!found_slash)
-                result->filepath.count = 0;
+                path.count = 0;
         }
 
         result->is_parent_directory = true;
@@ -1717,23 +1747,25 @@ mop_file_search_advance_signature
     {
         for (mop_u32 i = 0; file_iterator->win32.find_data.cFileName[i]; i++)
         {
-            mop_assert(result->filepath.count + 1 <= mop_carray_count(result->buffer));
-            result->filepath.base[result->filepath.count] = file_iterator->win32.find_data.cFileName[i];
-            result->filepath.count++;
+            mop_assert(path.count + 1 <= mop_carray_count(result->path.base));
+            path.base[path.count] = file_iterator->win32.find_data.cFileName[i];
+            path.count++;
         }
 
     #if 0
         if (result->is_directory)
         {
-            mop_assert(result->filepath.count + 1 <= mop_carray_count(result->buffer));
-            result->filepath.base[result->filepath.count] = '/';
-            result->filepath.count++;
+            mop_assert(path.count + 1 <= mop_carray_count(result->buffer));
+            path.base[path.count] = '/';
+            path.count++;
         }
     #endif
     }
 
     if (!FindNextFileA(file_iterator->win32.handle, &file_iterator->win32.find_data))
         file_iterator->win32.handle = mop_null;
+
+    mop_path_set_string(&result->path, path);
 
     return mop_true;
 }
@@ -1882,16 +1914,18 @@ mop_execute_command_siganture
 
 mop_load_library_signature
 {
-    mop_u8 cname[MAX_PATH];
-    mop_assert(name.count + 4 < mop_carray_count(cname));
-    mop_win32_to_cpath(cname, name);
-    cname[name.count] = '.';
-    cname[name.count + 1] = 'd';
-    cname[name.count + 2] = 'l';
-    cname[name.count + 3] = 'l';
-    cname[name.count + 4] = '\0';
+    mop_path_string cname;
+    mop_assert(name.count + 4 < mop_carray_count(cname.base));
 
-    library->module = LoadLibraryA((mop_cstring) cname);
+    mop_path_set_string(&cname, name);
+    cname.base[name.count] = '.';
+    cname.base[name.count + 1] = 'd';
+    cname.base[name.count + 2] = 'l';
+    cname.base[name.count + 3] = 'l';
+    cname.base[name.count + 4] = '\0';
+    cname.count += 4;
+
+    library->module = LoadLibraryA((mop_cstring) cname.base);
     return library->module != mop_null;
 }
 
@@ -1907,32 +1941,35 @@ mop_load_symbol_signature
     mop_assert(library->module);
 
     // not a path, but probably big enough
-    mop_u8 cname[MAX_PATH];
-    mop_win32_to_cpath(cname, name);
+    mop_path_string cname;
+    mop_path_set_string(&cname, name);
 
-    mop_u8 *symbol = (mop_u8 *) GetProcAddress(library->module, (mop_cstring) cname);
+    mop_u8 *symbol = (mop_u8 *) GetProcAddress(library->module, (mop_cstring) cname.base);
     return symbol;
 }
 
 mop_hot_reload_signature
 {
-    mop_u8 dll_name_buffer[MAX_PATH];
+    mop_path_string dll_name;
 
     mop_string program_directory = mop_get_program_directory(platform);
-    mop_assert(program_directory.count + name.count + 5 <= mop_carray_count(dll_name_buffer));
+    mop_assert(program_directory.count + name.count + 5 <= mop_carray_count(dll_name.base));
 
-    mop_win32_to_cpath(dll_name_buffer, program_directory);
-    dll_name_buffer[program_directory.count] = '/';
-    mop_win32_to_cpath(dll_name_buffer + program_directory.count + 1, name);
-    dll_name_buffer[program_directory.count + 1 + name.count] = '.';
-    dll_name_buffer[program_directory.count + 1 + name.count + 1] = 'd';
-    dll_name_buffer[program_directory.count + 1 + name.count + 2] = 'l';
-    dll_name_buffer[program_directory.count + 1 + name.count + 3] = 'l';
-    dll_name_buffer[program_directory.count + 1 + name.count + 4] = '\0';
+    mop_path_set_string(&dll_name, program_directory);
 
-    mop_string dll_name = { dll_name_buffer, program_directory.count + name.count + 5 };
+    dll_name.base[program_directory.count] = '/';
 
-    mop_u64 write_timestamp = mop_get_file_write_timestamp(platform, dll_name);
+    for (mop_u32 i = 0; i < name.count; i++)
+        dll_name.base[program_directory.count + 1 + i ] = name.base[i];
+
+    dll_name.base[program_directory.count + 1 + name.count] = '.';
+    dll_name.base[program_directory.count + 1 + name.count + 1] = 'd';
+    dll_name.base[program_directory.count + 1 + name.count + 2] = 'l';
+    dll_name.base[program_directory.count + 1 + name.count + 3] = 'l';
+    dll_name.base[program_directory.count + 1 + name.count + 4] = '\0';
+    dll_name.count = program_directory.count + 1 + name.count + 4;
+
+    mop_u64 write_timestamp = mop_get_file_write_timestamp(platform, mop_path_get_string(&dll_name));
     if (write_timestamp == state->write_timestamp)
         return mop_false;
 
@@ -1962,7 +1999,7 @@ mop_hot_reload_signature
         hot_name_buffer[4] = '0' + (i / 10);
         hot_name_buffer[5] = '0' + (i % 10);
 
-        if (mop_copy_file(platform, hot_name, dll_name, mop_true))
+        if (mop_copy_file(platform, hot_name, mop_path_get_string(&dll_name), mop_true))
             break;
     }
 
@@ -1977,10 +2014,10 @@ mop_hot_reload_signature
 
 mop_read_embedded_file_signature
 {
-    mop_u8 cname[MAX_PATH];
-    mop_win32_to_cpath(cname, name);
+    mop_path_string cname;
+    mop_path_set_string(&cname, name);
 
-    HRSRC resource = FindResourceA(mop_null, (char *) cname, RT_RCDATA);
+    HRSRC resource = FindResourceA(mop_null, (mop_cstring) cname.base, RT_RCDATA);
     mop_require(resource);
 
     HGLOBAL data = LoadResource(mop_null, resource);
