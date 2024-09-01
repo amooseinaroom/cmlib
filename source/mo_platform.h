@@ -1950,24 +1950,29 @@ mop_load_symbol_signature
 
 mop_hot_reload_signature
 {
-    mop_path_string dll_name;
+    mop_path_string dll_name = {0};
 
     mop_string program_directory = mop_get_program_directory(platform);
     mop_assert(program_directory.count + name.count + 5 <= mop_carray_count(dll_name.base));
 
-    mop_path_set_string(&dll_name, program_directory);
-
-    dll_name.base[program_directory.count] = '/';
+    if (program_directory.count)
+    {
+        mop_path_set_string(&dll_name, program_directory);
+        dll_name.base[dll_name.count] = '/';
+        dll_name.count += 1;
+    }
 
     for (mop_u32 i = 0; i < name.count; i++)
-        dll_name.base[program_directory.count + 1 + i ] = name.base[i];
+        dll_name.base[dll_name.count + i] = name.base[i];
 
-    dll_name.base[program_directory.count + 1 + name.count] = '.';
-    dll_name.base[program_directory.count + 1 + name.count + 1] = 'd';
-    dll_name.base[program_directory.count + 1 + name.count + 2] = 'l';
-    dll_name.base[program_directory.count + 1 + name.count + 3] = 'l';
-    dll_name.base[program_directory.count + 1 + name.count + 4] = '\0';
-    dll_name.count = program_directory.count + 1 + name.count + 4;
+    dll_name.count += name.count;
+
+    dll_name.base[dll_name.count] = '.';
+    dll_name.base[dll_name.count + 1] = 'd';
+    dll_name.base[dll_name.count + 2] = 'l';
+    dll_name.base[dll_name.count + 3] = 'l';
+    dll_name.base[dll_name.count + 4] = '\0';
+    dll_name.count += 4; // excluding '\0'
 
     mop_u64 write_timestamp = mop_get_file_write_timestamp(platform, mop_path_get_string(&dll_name));
     if (write_timestamp == state->write_timestamp)
